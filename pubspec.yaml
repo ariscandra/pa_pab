@@ -1,0 +1,47 @@
+name: sarypos
+description: "SaryPOS — aplikasi POS ritel untuk Sary Mart."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  get: ^4.7.2
+  supabase_flutter: ^2.12.0
+  flutter_dotenv: ^6.0.0
+  intl: ^0.20.2
+  pdf: ^3.11.1
+  printing: ^5.13.3
+  share_plus: ^10.1.4
+  path_provider: ^2.1.5
+  image_picker: ^1.1.2
+  http: ^1.2.2
+  barcode: ^2.2.9
+  file_picker: ^10.3.10
+  google_fonts: ^6.2.1
+  csv: ^6.0.0
+  shared_preferences: ^2.3.3
+  flutter_typeahead: ^5.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/images/sarymart_logo.png
+  adaptive_icon_background: "#FEFEFE"
+  adaptive_icon_foreground: assets/images/sarymart_logo.png
+  remove_alpha_ios: true
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - .env
