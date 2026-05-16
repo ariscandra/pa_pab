@@ -3,6 +3,7 @@ import 'package:sarypos/config/theme/sarypos_theme.dart';
 import 'package:sarypos/core/pengatur_sesi.dart';
 import 'package:sarypos/features/auth/halaman_daftar_owner.dart';
 import 'package:sarypos/features/auth/halaman_login.dart';
+import 'package:sarypos/widgets/card_sarypos.dart';
 
 class HalamanPembukaOwnerPertama extends StatelessWidget {
   const HalamanPembukaOwnerPertama({super.key, required this.pengatur});
@@ -42,15 +43,18 @@ class HalamanPembukaOwnerPertama extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    'Belum ada pemilik toko terdaftar. Daftarkan pemilik sekali, '
-                    'atau lanjut sebagai kasir tanpa akun pemilik (data demo).',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  CardSarypos(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        'Belum ada pemilik toko terdaftar. Daftarkan pemilik sekali, '
+                        'atau lanjut sebagai kasir tanpa akun pemilik.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
@@ -92,6 +96,13 @@ class HalamanPembukaOwnerPertama extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   TextButton(
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
                     onPressed: () => pengatur.lanjutSebagaiKasirTanpaOwner(),
                     child: const Text('Lanjut sebagai kasir tanpa pemilik'),
                   ),

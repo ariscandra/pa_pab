@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:sarypos/config/theme/sarypos_theme.dart';
+import 'package:sarypos/config/inset_nav_utama.dart';
 import 'package:sarypos/core/format_rupiah.dart';
+import 'package:sarypos/core/layanan_lokasi_sarypos.dart';
 import 'package:sarypos/core/label_metode_pembayaran.dart';
 import 'package:sarypos/core/layanan_catat_log.dart';
 import 'package:sarypos/core/pengelola_notifikasi_in_app.dart';
@@ -11,6 +14,7 @@ import 'package:sarypos/data/models/produk_model.dart';
 import 'package:sarypos/data/models/stok_model.dart';
 import 'package:sarypos/data/sources/produk_dan_stok_sumber.dart';
 import 'package:sarypos/data/sources/transaksi_sumber.dart';
+import 'package:sarypos/widgets/baris_metode_pembayaran.dart';
 import 'package:sarypos/widgets/card_sarypos.dart';
 import 'package:sarypos/widgets/empty_state_generik.dart';
 import 'package:sarypos/widgets/skeleton_sarypos.dart';
@@ -18,13 +22,17 @@ import 'package:sarypos/widgets/snackbar_sarypos.dart';
 import 'package:sarypos/core/formatter_tanpa_emoji.dart';
 
 class HalamanPos extends StatefulWidget {
-  const HalamanPos({super.key});
+  const HalamanPos({super.key, this.diAtasNavUtama = true});
+
+  /// `false` saat dibuka lewat rute penuh tanpa bottom nav (mis. menu Kasir).
+  final bool diAtasNavUtama;
 
   @override
   State<HalamanPos> createState() => _HalamanPosState();
 }
 
-class _HalamanPosState extends State<HalamanPos> {
+class _HalamanPosState extends State<HalamanPos>
+    with SingleTickerProviderStateMixin {
   final _produkSumber = ProdukDanStokSumber();
   final _transaksiSumber = TransaksiSumber();
   final List<ItemKeranjang> _keranjang = [];
@@ -38,6 +46,9 @@ class _HalamanPosState extends State<HalamanPos> {
   List<ProdukModel> _produk = [];
   String _metodePembayaran = 'tunai';
   bool _sudahPeringatanStokKritis = false;
+  Timer? _debounceCari;
+  TabController? _tabSempit;
+  int _tickFilterCari = 0;
 
   static const _kodeMetode = ['tunai', 'transfer', 'e_wallet', 'debit_kredit'];
 
@@ -49,9 +60,70 @@ class _HalamanPosState extends State<HalamanPos> {
 
   @override
   void dispose() {
+    _debounceCari?.cancel();
+    _tabSempit?.dispose();
     _pencarianProduk.dispose();
     _potongan.dispose();
     super.dispose();
+  }
+
+  void _pastikanTabSempit(int panjang) {
+    if (_tabSempit != null && _tabSempit!.length == panjang) {
+      return;
+    }
+    _tabSempit?.dispose();
+    _tabSempit = TabController(length: panjang, vsync: this);
+  }
+
+  void _onCariBerubah(String _) {
+    _debounceCari?.cancel();
+    _debounceCari = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      setState(() => _tickFilterCari++);
+    });
+  }
+
+  Widget _lapisanSedangMenyimpan(Widget anak) {
+    if (!_sedangMenyimpan) {
+      return anak;
+    }
+    return Stack(
+      children: [
+        anak,
+        Positioned.fill(
+          child: AbsorbPointer(
+            child: ColoredBox(
+              color: Colors.black.withValues(alpha: 0.42),
+              child: Center(
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 22,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: CircularProgressIndicator(strokeWidth: 3),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Menyimpan transaksi…',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   int get _subtotalKeranjang =>
@@ -295,6 +367,22 @@ class _HalamanPosState extends State<HalamanPos> {
         totalAkhir: totalSimpan,
       );
 
+      final futLokasi = LayananLokasiSarypos.jalankanAmbilSekali();
+      Future<void> perbaharuiDbLokasi() async {
+        try {
+          final hasil = await futLokasi;
+          if (hasil == null || idTrx == null) return;
+          await _transaksiSumber.perbaruiLokasiTransaksi(
+            transaksiId: idTrx,
+            lokasiRingkas: hasil.lokasiRingkas,
+            lat: hasil.lat,
+            lng: hasil.lng,
+          );
+        } catch (_) {}
+      }
+
+      unawaited(perbaharuiDbLokasi());
+
       setState(() {
         _keranjang.clear();
         _metodePembayaran = 'tunai';
@@ -305,10 +393,22 @@ class _HalamanPosState extends State<HalamanPos> {
         return;
       }
 
+      Map<String, dynamic>? metaTambahanLokasi;
+      try {
+        final selesaiSingkat = await futLokasi.timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => null,
+        );
+        if (selesaiSingkat != null) {
+          metaTambahanLokasi = selesaiSingkat.keMapMetadataJson();
+        }
+      } catch (_) {}
+
       final metaLog = <String, dynamic>{
         'metode': metodeSimpan,
         if (potonganMentah > 0) 'potongan': potonganMentah,
         if (potonganMentah > 0) 'subtotal': subtotal,
+        ...?metaTambahanLokasi,
       };
       if (idTrx != null) {
         metaLog['transaksi_id'] = idTrx;
@@ -333,14 +433,6 @@ class _HalamanPosState extends State<HalamanPos> {
         pesan: 'Transaksi berhasil dicatat.',
       );
 
-      if (!mounted) {
-        return;
-      }
-      tampilkanSnackbarSarypos(
-        context,
-        tipe: TipeSnackbarSarypos.sukses,
-        pesan: 'Transaksi berhasil disimpan.',
-      );
       await _sinkronkanStokDariServer();
     } catch (e) {
       if (!mounted) {
@@ -370,6 +462,9 @@ class _HalamanPosState extends State<HalamanPos> {
 
   @override
   Widget build(BuildContext context) {
+    // Memicu filter ulang setelah debounce pencarian.
+    // ignore: unused_local_variable
+    final _ = _tickFilterCari;
     final kueriPencarian = _pencarianProduk.text.trim().toLowerCase();
     final produkTersaring = kueriPencarian.isEmpty
         ? _produk
@@ -380,136 +475,153 @@ class _HalamanPosState extends State<HalamanPos> {
           }).toList();
 
     if (_sedangMemuatProduk) {
-      return SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final lebarCukupLuas = constraints.maxWidth > 700;
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final lebarCukupLuas = constraints.maxWidth > 700;
 
-            final kiri = _BangunanDaftarProdukSkeleton();
-            final kanan = _BangunanRingkasanTransaksiSkeleton();
+          final paddingBawah = InsetNavUtama.paddingBawahKonten(
+            context,
+            diAtasNavUtama: widget.diAtasNavUtama,
+          );
+          final kiri = _BangunanDaftarProdukSkeleton(
+            paddingBawah: paddingBawah,
+          );
+          final kanan = _BangunanRingkasanTransaksiSkeleton(
+            paddingBawah: paddingBawah,
+          );
 
-            final konten = lebarCukupLuas
-                ? Row(
-                    children: [
-                      Expanded(flex: 2, child: kiri),
-                      const SizedBox(width: 16),
-                      Expanded(flex: 3, child: kanan),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      Expanded(flex: 3, child: kiri),
-                      const SizedBox(height: 16),
-                      Expanded(flex: 4, child: kanan),
-                    ],
-                  );
+          final konten = lebarCukupLuas
+              ? Row(
+                  children: [
+                    Expanded(flex: 2, child: kiri),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 3, child: kanan),
+                  ],
+                )
+              : Column(
+                  children: [
+                    Expanded(flex: 3, child: kiri),
+                    const SizedBox(height: 16),
+                    Expanded(flex: 4, child: kanan),
+                  ],
+                );
 
-            return Padding(padding: const EdgeInsets.all(16), child: konten);
-          },
-        ),
+          return Padding(
+            padding: InsetNavUtama.paddingKontenTabAtasSamping,
+            child: konten,
+          );
+        },
       );
     }
 
     if (_pesanError != null) {
-      return SafeArea(
-        child: EmptyStateGenerik(
+      return EmptyStateGenerik(
           ikon: Icons.error_outline,
           judul: 'Gagal Memuat Data',
           pesan: _pesanError!,
           labelTombol: 'Coba lagi',
           onTekanTombol: _muatProduk,
-        ),
-      );
+        );
     }
 
     if (_produk.isEmpty) {
-      return const SafeArea(
-        child: EmptyStateGenerik(
-          ikon: Icons.inventory_2_outlined,
-          judul: 'Belum Ada Produk',
-          pesan: 'Tambahkan produk terlebih dahulu sebelum menggunakan kasir.',
-        ),
+      return const EmptyStateGenerik(
+        ikon: Icons.inventory_2_outlined,
+        judul: 'Belum Ada Produk',
+        pesan: 'Tambahkan produk terlebih dahulu sebelum menggunakan kasir.',
       );
     }
 
-    return SafeArea(
-      child: LayoutBuilder(
+    final paddingBawah = InsetNavUtama.paddingBawahKonten(
+      context,
+      diAtasNavUtama: widget.diAtasNavUtama,
+    );
+
+    final ringkasan = _BangunanRingkasanTransaksi(
+      keranjang: _keranjang,
+      subtotal: _subtotalKeranjang,
+      totalBayar: _totalBayar,
+      metodePembayaran: _metodePembayaran,
+      sedangMenyimpan: _sedangMenyimpan,
+      kodeMetode: _kodeMetode,
+      controllerPotongan: _potongan,
+      onPotonganChanged: () => setState(() {}),
+      onUbahKuantitas: _ubahKuantitas,
+      onKetukKuantitas: _ubahKuantitasLewatDialog,
+      onUbahMetodePembayaran: (nilaiBaru) {
+        setState(() => _metodePembayaran = nilaiBaru);
+      },
+      onSimpan: _simpanTransaksi,
+      paddingBawah: paddingBawah,
+    );
+
+    final daftarProduk = _BangunanDaftarProduk(
+      produk: produkTersaring,
+      onPilihProduk: _tambahKeKeranjang,
+      controllerPencarian: _pencarianProduk,
+      onCariChanged: _onCariBerubah,
+      paddingBawah: paddingBawah,
+    );
+
+    return _lapisanSedangMenyimpan(
+      LayoutBuilder(
         builder: (context, constraints) {
           final lebarCukupLuas = constraints.maxWidth > 700;
 
-          final konten = lebarCukupLuas
-              ? Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: _BangunanDaftarProduk(
-                        produk: produkTersaring,
-                        onPilihProduk: _tambahKeKeranjang,
-                        controllerPencarian: _pencarianProduk,
-                        onCariChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 3,
-                      child: _BangunanRingkasanTransaksi(
-                        keranjang: _keranjang,
-                        subtotal: _subtotalKeranjang,
-                        totalBayar: _totalBayar,
-                        metodePembayaran: _metodePembayaran,
-                        sedangMenyimpan: _sedangMenyimpan,
-                        kodeMetode: _kodeMetode,
-                        controllerPotongan: _potongan,
-                        onPotonganChanged: () => setState(() {}),
-                        onUbahKuantitas: _ubahKuantitas,
-                        onKetukKuantitas: _ubahKuantitasLewatDialog,
-                        onUbahMetodePembayaran: (nilaiBaru) {
-                          setState(() {
-                            _metodePembayaran = nilaiBaru;
-                          });
-                        },
-                        onSimpan: _simpanTransaksi,
-                      ),
-                    ),
-                  ],
-                )
-              : Column(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: _BangunanDaftarProduk(
-                        produk: produkTersaring,
-                        onPilihProduk: _tambahKeKeranjang,
-                        controllerPencarian: _pencarianProduk,
-                        onCariChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      flex: 4,
-                      child: _BangunanRingkasanTransaksi(
-                        keranjang: _keranjang,
-                        subtotal: _subtotalKeranjang,
-                        totalBayar: _totalBayar,
-                        metodePembayaran: _metodePembayaran,
-                        sedangMenyimpan: _sedangMenyimpan,
-                        kodeMetode: _kodeMetode,
-                        controllerPotongan: _potongan,
-                        onPotonganChanged: () => setState(() {}),
-                        onUbahKuantitas: _ubahKuantitas,
-                        onKetukKuantitas: _ubahKuantitasLewatDialog,
-                        onUbahMetodePembayaran: (nilaiBaru) {
-                          setState(() {
-                            _metodePembayaran = nilaiBaru;
-                          });
-                        },
-                        onSimpan: _simpanTransaksi,
+          final Widget konten;
+          if (lebarCukupLuas) {
+            konten = Row(
+              children: [
+                Expanded(flex: 2, child: daftarProduk),
+                const SizedBox(width: 16),
+                Expanded(flex: 3, child: ringkasan),
+              ],
+            );
+          } else {
+            _pastikanTabSempit(2);
+            final jumlahKeranjang = _keranjang.length;
+            konten = Column(
+              children: [
+                TabBar(
+                  controller: _tabSempit,
+                  labelColor: Theme.of(context).colorScheme.primary,
+                  unselectedLabelColor:
+                      Theme.of(context).colorScheme.onSurfaceVariant,
+                  indicatorColor: Theme.of(context).colorScheme.primary,
+                  tabs: [
+                    const Tab(text: 'Produk'),
+                    Tab(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Keranjang'),
+                          if (jumlahKeranjang > 0) ...[
+                            const SizedBox(width: 6),
+                            Badge(
+                              label: Text('$jumlahKeranjang'),
+                              backgroundColor:
+                                  Theme.of(context).colorScheme.primary,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],
-                );
+                ),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabSempit,
+                    children: [daftarProduk, ringkasan],
+                  ),
+                ),
+              ],
+            );
+          }
 
-          return Padding(padding: const EdgeInsets.all(16), child: konten);
+          return Padding(
+            padding: InsetNavUtama.paddingKontenTabAtasSamping,
+            child: konten,
+          );
         },
       ),
     );
@@ -617,107 +729,124 @@ class _BangunanDaftarProduk extends StatelessWidget {
     required this.onPilihProduk,
     required this.controllerPencarian,
     required this.onCariChanged,
+    required this.paddingBawah,
   });
 
   final List<ProdukModel> produk;
   final void Function(ProdukModel) onPilihProduk;
   final TextEditingController controllerPencarian;
   final ValueChanged<String> onCariChanged;
+  final double paddingBawah;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Pilih Produk', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 6),
-        Text(
-          'SaryPOS adalah pendamping pencatatan di kasir, bukan pengganti mesin kasir utama.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controllerPencarian,
-          onChanged: onCariChanged,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-          decoration: InputDecoration(
-            isDense: true,
-            hintText: 'Cari nama atau kategori',
-            hintStyle: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
-            prefixIcon: const Icon(Icons.search, size: 20),
-            prefixIconConstraints: const BoxConstraints(
-              minWidth: 40,
-              minHeight: 36,
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 0,
-              vertical: 10,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: produk.isEmpty
-              ? const EmptyStateGenerik(
-                  ikon: Icons.search_off_outlined,
-                  pesan: 'Produk tidak ditemukan untuk pencarian ini.',
-                )
-              : GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 3,
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pilih Produk',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: controllerPencarian,
+                onChanged: onCariChanged,
+                style: Theme.of(context).textTheme.bodyMedium,
+                decoration: const InputDecoration(
+                  hintText: 'Cari nama atau kategori',
+                  prefixIcon: Icon(Icons.search_rounded),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
                   ),
-                  itemCount: produk.length,
-                  itemBuilder: (context, indeks) {
-                    final item = produk[indeks];
-                    return CardSarypos(
-                      elevation: 0,
-                      tampilkanKonturTipis: true,
-                      onTap: () => onPilihProduk(item),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 6,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                item.nama,
-                                maxLines: 1,
-                                softWrap: false,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(height: 1.05),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              formatRupiah(item.harga),
-                              maxLines: 1,
-                              softWrap: false,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    height: 1.0,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
                 ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
+        if (produk.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: paddingBawah),
+              child: const EmptyStateGenerik(
+                ikon: Icons.search_off_outlined,
+                pesan: 'Produk tidak ditemukan untuk pencarian ini.',
+              ),
+            ),
+          )
+        else
+          SliverLayoutBuilder(
+            builder: (context, constraints) {
+              final kolom = constraints.crossAxisExtent >= 520 ? 3 : 2;
+              final rasioKartu = kolom >= 3 ? 1.75 : 1.38;
+              return SliverPadding(
+                padding: EdgeInsets.only(bottom: paddingBawah),
+                sliver: SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: kolom,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: rasioKartu,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, indeks) {
+                      final item = produk[indeks];
+                      return CardSarypos(
+                        elevation: 0,
+                        tampilkanKonturTipis: true,
+                        onTap: () => onPilihProduk(item),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.nama,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleSmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.2,
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              TeksRupiah(
+                                item.harga,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelLarge
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.2,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: produk.length,
+                  ),
+                ),
+              );
+            },
+          ),
       ],
     );
   }
@@ -737,6 +866,7 @@ class _BangunanRingkasanTransaksi extends StatelessWidget {
     required this.onKetukKuantitas,
     required this.onUbahMetodePembayaran,
     required this.onSimpan,
+    required this.paddingBawah,
   });
 
   final List<ItemKeranjang> keranjang;
@@ -751,6 +881,7 @@ class _BangunanRingkasanTransaksi extends StatelessWidget {
   final Future<void> Function(ItemKeranjang item) onKetukKuantitas;
   final void Function(String nilaiBaru) onUbahMetodePembayaran;
   final VoidCallback onSimpan;
+  final double paddingBawah;
 
   @override
   Widget build(BuildContext context) {
@@ -773,8 +904,20 @@ class _BangunanRingkasanTransaksi extends StatelessWidget {
                     final item = keranjang[indeks];
                     return ListTile(
                       title: Text(item.produk.nama),
-                      subtitle: Text(
-                        '${formatRupiah(item.produk.harga)} × ${item.kuantitas}',
+                      subtitle: Text.rich(
+                        TextSpan(
+                          style: teksTema.bodySmall,
+                          children: [
+                            TextSpan(
+                              text: formatRupiah(item.produk.harga),
+                              style: gayaTeksNominal(
+                                context,
+                                dasar: teksTema.bodySmall,
+                              ),
+                            ),
+                            TextSpan(text: ' × ${item.kuantitas}'),
+                          ],
+                        ),
                       ),
                       trailing: SizedBox(
                         width: 148,
@@ -837,25 +980,11 @@ class _BangunanRingkasanTransaksi extends StatelessWidget {
                 ),
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          // ignore: deprecated_member_use
-          value: metodePembayaran,
-          decoration: const InputDecoration(labelText: 'Metode pembayaran'),
-          items: kodeMetode
-              .map(
-                (k) => DropdownMenuItem(
-                  value: k,
-                  child: Text(labelMetodePembayaran(k)),
-                ),
-              )
-              .toList(),
-          onChanged: sedangMenyimpan
-              ? null
-              : (nilai) {
-                  if (nilai != null) {
-                    onUbahMetodePembayaran(nilai);
-                  }
-                },
+        BarisMetodePembayaran(
+          kodeMetode: kodeMetode,
+          terpilih: metodePembayaran,
+          nonaktif: sedangMenyimpan,
+          onPilih: onUbahMetodePembayaran,
         ),
         const SizedBox(height: 12),
         TextField(
@@ -877,8 +1006,8 @@ class _BangunanRingkasanTransaksi extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Subtotal', style: teksTema.bodyMedium),
-            Text(
-              formatRupiah(subtotal),
+            TeksRupiah(
+              subtotal,
               style: teksTema.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
           ],
@@ -888,34 +1017,37 @@ class _BangunanRingkasanTransaksi extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Total dibayar', style: teksTema.titleMedium),
-            Text(
-              formatRupiah(totalBayar),
+            TeksRupiah(
+              totalBayar,
               style: teksTema.titleMedium?.copyWith(
-                color: WarnaSarypos.saryRed,
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: sedangMenyimpan || !adaItem ? null : onSimpan,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: WarnaSarypos.saryRed,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-              padding: const EdgeInsets.symmetric(vertical: 14),
+        Padding(
+          padding: EdgeInsets.only(bottom: paddingBawah),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: sedangMenyimpan || !adaItem ? null : onSimpan,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: sedangMenyimpan
+                  ? SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                    )
+                  : const Text('Simpan transaksi'),
             ),
-            child: sedangMenyimpan
-                ? SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Theme.of(context).colorScheme.onPrimary,
-                    ),
-                  )
-                : const Text('Simpan transaksi'),
           ),
         ),
       ],
@@ -924,62 +1056,76 @@ class _BangunanRingkasanTransaksi extends StatelessWidget {
 }
 
 class _BangunanDaftarProdukSkeleton extends StatelessWidget {
-  const _BangunanDaftarProdukSkeleton();
+  const _BangunanDaftarProdukSkeleton({required this.paddingBawah});
+
+  final double paddingBawah;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Pilih Produk', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 6),
-        Text(
-          'SaryPOS adalah pendamping pencatatan di kasir, bukan pengganti mesin kasir utama.',
-          style: Theme.of(context).textTheme.bodySmall,
+
+    return CustomScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pilih Produk',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'SaryPOS adalah pendamping pencatatan di kasir, bukan pengganti mesin kasir utama.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: GridView.builder(
-            physics: const NeverScrollableScrollPhysics(),
+        SliverPadding(
+          padding: EdgeInsets.only(bottom: paddingBawah),
+          sliver: SliverGrid(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
-              childAspectRatio: 3,
+              childAspectRatio: 1.38,
             ),
-            itemCount: 6,
-            itemBuilder: (context, indeks) {
-              return CardSarypos(
-                elevation: 0,
-                tampilkanKonturTipis: true,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final w = constraints.maxWidth;
-                            return SkeletonLine(
-                              width: w,
-                              height: 14,
-                              borderRadius: 10,
-                            );
-                          },
+            delegate: SliverChildBuilderDelegate(
+              (context, indeks) {
+                return CardSarypos(
+                  elevation: 0,
+                  tampilkanKonturTipis: true,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return SkeletonLine(
+                                width: constraints.maxWidth,
+                                height: 14,
+                                borderRadius: 10,
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      const SkeletonLine(
-                        width: 54,
-                        height: 14,
-                        borderRadius: 10,
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        const SkeletonLine(
+                          width: 72,
+                          height: 14,
+                          borderRadius: 10,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+              childCount: 6,
+            ),
           ),
         ),
       ],
@@ -988,7 +1134,9 @@ class _BangunanDaftarProdukSkeleton extends StatelessWidget {
 }
 
 class _BangunanRingkasanTransaksiSkeleton extends StatelessWidget {
-  const _BangunanRingkasanTransaksiSkeleton();
+  const _BangunanRingkasanTransaksiSkeleton({required this.paddingBawah});
+
+  final double paddingBawah;
 
   @override
   Widget build(BuildContext context) {
@@ -1062,10 +1210,17 @@ class _BangunanRingkasanTransaksiSkeleton extends StatelessWidget {
           },
         ),
         const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, c) {
-            return SkeletonBox(width: c.maxWidth, height: 52, borderRadius: 12);
-          },
+        Padding(
+          padding: EdgeInsets.only(bottom: paddingBawah),
+          child: LayoutBuilder(
+            builder: (context, c) {
+              return SkeletonBox(
+                width: c.maxWidth,
+                height: 52,
+                borderRadius: 12,
+              );
+            },
+          ),
         ),
       ],
     );

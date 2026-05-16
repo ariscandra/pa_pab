@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -25,6 +26,10 @@ Future<void> main() async {
   }
   try {
     await GoogleFonts.pendingFonts([GoogleFonts.plusJakartaSans()]);
+  } catch (_) {}
+
+  try {
+    await initializeDateFormatting('id_ID', null);
   } catch (_) {}
 
   await inisialisasiSupabase();
@@ -102,18 +107,7 @@ class _MainAppState extends State<MainApp> {
 
   Widget _pilihHome() {
     if (_sesi.sedangMemeriksaSesi) {
-      return const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Menyiapkan SaryPOS…'),
-            ],
-          ),
-        ),
-      );
+      return const _SedangMemuatSarypos();
     }
     if (_sesi.sedangMengalamiError) {
       return HalamanErrorKoneksi(
@@ -125,5 +119,76 @@ class _MainAppState extends State<MainApp> {
       return HalamanPembukaOwnerPertama(pengatur: _sesi);
     }
     return const HalamanUtamaDenganNav();
+  }
+}
+
+class _SedangMemuatSarypos extends StatelessWidget {
+  const _SedangMemuatSarypos();
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    return Scaffold(
+      backgroundColor: tema.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Semantics(
+                    label: 'Logo Sary Mart',
+                    image: true,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.asset(
+                        'assets/images/sarymart_logo.png',
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) => Icon(
+                          Icons.storefront_rounded,
+                          size: 64,
+                          color: tema.colorScheme.tertiary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'SaryPOS',
+                    style: tema.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: warnaAksenJudulBagian(context),
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Menyiapkan sesi dan data…',
+                    style: tema.textTheme.bodyMedium?.copyWith(
+                      color: tema.colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 28),
+                  SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: tema.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

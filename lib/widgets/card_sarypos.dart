@@ -10,6 +10,7 @@ class CardSarypos extends StatelessWidget {
     this.elevation,
     this.onTap,
     this.tampilkanKonturTipis = false,
+    this.tampilkanAksenDekoratif = true,
   });
 
   final Widget child;
@@ -20,6 +21,7 @@ class CardSarypos extends StatelessWidget {
   final VoidCallback? onTap;
 
   final bool tampilkanKonturTipis;
+  final bool tampilkanAksenDekoratif;
 
   @override
   Widget build(BuildContext context) {
@@ -53,31 +55,34 @@ class CardSarypos extends StatelessWidget {
         borderRadius: radius,
       ),
       child: Stack(
+        clipBehavior: Clip.hardEdge,
         children: [
-          Positioned(
-            left: -40,
-            top: -40,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: WarnaSarypos.saryGold.withValues(alpha: 0.10),
+          if (tampilkanAksenDekoratif) ...[
+            Positioned(
+              left: -40,
+              top: -40,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: WarnaSarypos.saryGold.withValues(alpha: 0.10),
+                ),
               ),
             ),
-          ),
-          Positioned(
-            right: -60,
-            bottom: -90,
-            child: Container(
-              width: 180,
-              height: 180,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: WarnaSarypos.saryRed.withValues(alpha: 0.07),
+            Positioned(
+              right: -60,
+              bottom: -90,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: WarnaSarypos.saryRed.withValues(alpha: 0.07),
+                ),
               ),
             ),
-          ),
+          ],
           child,
         ],
       ),

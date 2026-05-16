@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sarypos/config/inset_nav_utama.dart';
 import 'package:sarypos/config/theme/sarypos_theme.dart';
 import 'package:sarypos/core/format_rupiah.dart';
 import 'package:sarypos/core/logika_preview_produk_perhatian.dart';
@@ -18,6 +19,7 @@ import 'package:sarypos/features/log_aktivitas/halaman_log_aktivitas.dart';
 import 'package:sarypos/features/produk/halaman_daftar_produk.dart';
 import 'package:sarypos/features/produk/halaman_form_produk.dart';
 import 'package:sarypos/widgets/card_ringkasan.dart';
+import 'package:sarypos/widgets/judul_bagian_sarypos.dart';
 import 'package:sarypos/widgets/card_sarypos.dart';
 import 'package:sarypos/widgets/skeleton_sarypos.dart';
 
@@ -187,21 +189,12 @@ class HalamanDashboardState extends State<HalamanDashboard> {
     });
   }
 
-  Widget _stackCardJumlahTransaksi(int jumlahTransaksi) {
-    return Stack(
-      children: [
-        CardRingkasan(
-          margin: EdgeInsets.zero,
-          judul: 'Jumlah Transaksi',
-          nilaiUtama: '$jumlahTransaksi',
-          ikon: Icons.receipt_long,
-        ),
-        Positioned(
-          top: 18,
-          right: 18,
-          child: _buildIndikatorDot(_indeksRingkasan),
-        ),
-      ],
+  Widget _kartuJumlahTransaksi(int jumlahTransaksi) {
+    return CardRingkasan(
+      margin: EdgeInsets.zero,
+      judul: 'Jumlah Transaksi',
+      nilaiUtama: '$jumlahTransaksi',
+      ikon: Icons.receipt_long,
     );
   }
 
@@ -264,7 +257,9 @@ class HalamanDashboardState extends State<HalamanDashboard> {
                       child: DecoratedBox(
                         decoration: BoxDecoration(color: kanvas),
                         child: Padding(
-                          padding: const EdgeInsets.only(bottom: 100),
+                          padding: EdgeInsets.only(
+                            bottom: InsetNavUtama.paddingBawahScroll(context),
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -392,23 +387,12 @@ class HalamanDashboardState extends State<HalamanDashboard> {
                                         ),
                                       ),
                                     if (!adaError) ...[
-                                      Text(
-                                        'RINGKASAN',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleSmall
-                                            ?.copyWith(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: 0.9,
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.onSurfaceVariant,
-                                            ),
+                                      const JudulBagianSarypos(
+                                        judul: 'Ringkasan hari ini',
                                       ),
-                                      const SizedBox(height: 8),
+                                      const SizedBox(height: 10),
                                       SizedBox(
-                                        height: 140,
+                                        height: 148,
                                         child: PageView(
                                           controller: _kunciCarousel,
                                           scrollDirection: Axis.horizontal,
@@ -424,19 +408,7 @@ class HalamanDashboardState extends State<HalamanDashboard> {
                                           children: sedangMemuat
                                               ? List.generate(
                                                   2,
-                                                  (i) => Stack(
-                                                    children: [
-                                                      const _CardRingkasanSkeleton(),
-                                                      Positioned(
-                                                        top: 18,
-                                                        right: 18,
-                                                        child:
-                                                            _buildIndikatorDot(
-                                                              _indeksRingkasan,
-                                                            ),
-                                                      ),
-                                                    ],
-                                                  ),
+                                                  (_) => const _CardRingkasanSkeleton(),
                                                 )
                                               : [
                                                   GestureDetector(
@@ -451,29 +423,15 @@ class HalamanDashboardState extends State<HalamanDashboard> {
                                                     },
                                                     behavior:
                                                         HitTestBehavior.opaque,
-                                                    child: Stack(
-                                                      children: [
-                                                        CardRingkasan(
-                                                          margin:
-                                                              EdgeInsets.zero,
-                                                          judul:
-                                                              'Penjualan Hari Ini',
-                                                          nilaiUtama:
-                                                              formatRupiah(
-                                                                totalPenjualan,
-                                                              ),
-                                                          ikon: Icons
-                                                              .attach_money,
-                                                        ),
-                                                        Positioned(
-                                                          top: 18,
-                                                          right: 18,
-                                                          child:
-                                                              _buildIndikatorDot(
-                                                                _indeksRingkasan,
-                                                              ),
-                                                        ),
-                                                      ],
+                                                    child: CardRingkasan(
+                                                      margin: EdgeInsets.zero,
+                                                      judul:
+                                                          'Penjualan Hari Ini',
+                                                      nilaiUtama: formatRupiah(
+                                                        totalPenjualan,
+                                                      ),
+                                                      ikon: Icons
+                                                          .payments_outlined,
                                                     ),
                                                   ),
                                                   isOwner
@@ -491,14 +449,20 @@ class HalamanDashboardState extends State<HalamanDashboard> {
                                                               HitTestBehavior
                                                                   .opaque,
                                                           child:
-                                                              _stackCardJumlahTransaksi(
+                                                              _kartuJumlahTransaksi(
                                                                 jumlahTransaksi,
                                                               ),
                                                         )
-                                                      : _stackCardJumlahTransaksi(
+                                                      : _kartuJumlahTransaksi(
                                                           jumlahTransaksi,
                                                         ),
                                                 ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Center(
+                                        child: _buildIndikatorDot(
+                                          _indeksRingkasan,
                                         ),
                                       ),
                                     ],
@@ -961,13 +925,16 @@ class _BarisAktivitasBeranda extends StatelessWidget {
                   ],
                 ),
                 Text(
-                  log.deskripsi,
+                  susunDeskripsiTampilanLog(
+                    deskripsi: log.deskripsi,
+                    metadata: log.metadataJson,
+                  ),
                   style: teks.bodySmall?.copyWith(
                     color: skema.onSurfaceVariant,
                     fontSize: 12,
                     height: 1.2,
                   ),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:sarypos/core/format_rupiah.dart';
 import 'package:sarypos/config/theme/sarypos_theme.dart';
 import 'package:sarypos/data/models/produk_inventaris_model.dart';
 import 'package:sarypos/data/sources/produk_dan_stok_sumber.dart';
@@ -7,6 +10,7 @@ import 'package:sarypos/features/produk/halaman_form_produk.dart';
 import 'package:sarypos/core/warisan_sesi.dart';
 import 'package:sarypos/widgets/appbar_sarypos.dart';
 import 'package:sarypos/widgets/card_sarypos.dart';
+import 'package:sarypos/widgets/chip_filter_sarypos.dart';
 import 'package:sarypos/widgets/empty_state_generik.dart';
 import 'package:sarypos/widgets/skeleton_sarypos.dart';
 import 'package:sarypos/widgets/snackbar_sarypos.dart';
@@ -83,6 +87,7 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
 
   String? _kategoriFilter;
   List<String> _kategoriTersedia = [];
+  Timer? _debounceCari;
 
   bool _pastikanSesiValid() {
     final pengaturSesi = WarisanSesi.dari(context);
@@ -109,8 +114,14 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
 
   @override
   void dispose() {
+    _debounceCari?.cancel();
     _cari.dispose();
     super.dispose();
+  }
+
+  void _jadwalkanMuatUlang() {
+    _debounceCari?.cancel();
+    _debounceCari = Timer(const Duration(milliseconds: 280), _muat);
   }
 
   Future<void> _muat() async {
@@ -339,34 +350,6 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
     await _muat();
   }
 
-  Widget _chipFilter({
-    required String label,
-    required bool selected,
-    required VoidCallback onPilih,
-  }) {
-    final tema = Theme.of(context);
-    final gayaTeks = tema.textTheme.labelMedium?.copyWith(
-      fontSize: 12,
-      height: 1.1,
-      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-    );
-    return ChoiceChip(
-      label: Text(label, style: gayaTeks),
-      selected: selected,
-      visualDensity: VisualDensity.compact,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-      side: BorderSide(
-        color: selected
-            ? WarnaSarypos.deepTeal
-            : WarnaSarypos.warmGray.withValues(alpha: 0.9),
-      ),
-      selectedColor: WarnaSarypos.deepTeal.withValues(alpha: 0.18),
-      onSelected: (_) => onPilih(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     Widget isi;
@@ -409,14 +392,17 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
         pesan: pesan,
       );
     } else {
-      isi = GridView.builder(
-        padding: const EdgeInsets.only(bottom: 24),
-        itemCount: _produk.length,
+      isi = RefreshIndicator(
+        onRefresh: _muat,
+        child: GridView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 24),
+          itemCount: _produk.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 0.65,
+          childAspectRatio: 0.80,
         ),
         itemBuilder: (context, indeks) {
           final tema = Theme.of(context);
@@ -494,6 +480,7 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
           return Opacity(
             opacity: nonaktif ? 0.74 : 1,
             child: CardSarypos(
+              tampilkanAksenDekoratif: false,
               onTap: () async {
                 if (!_pastikanSesiValid()) return;
                 await Navigator.of(context).push(
@@ -505,17 +492,14 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
                 await _muat();
               },
               child: Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.max,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    ClipRRect(
+                    Expanded(
+                      child: ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 100,
-                        child: Builder(
+                      child: Builder(
                           builder: (context) {
                             final Widget dasar = m.produk.gambarUrl != null
                                 ? Image.network(
@@ -545,7 +529,7 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
                                         children: const [
                                           SkeletonBox(
                                             width: double.infinity,
-                                            height: 100,
+                                            height: double.infinity,
                                             borderRadius: 10,
                                           ),
                                           Center(
@@ -584,104 +568,126 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       m.produk.nama,
-                      style: Theme.of(context).textTheme.titleMedium,
-                      maxLines: 1,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
+                    TeksRupiah(
+                      m.produk.harga,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
                     Text(
-                      'Kategori: ${m.produk.kategori ?? '-'}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      m.produk.kategori ?? '-',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        height: 1.15,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 1),
                     Text(
-                      'Kadaluarsa: ${tgl == null ? '-' : _formatTanggalKadaluarsa(tgl)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(),
+                      tgl == null
+                          ? 'EXP -'
+                          : 'EXP ${_formatTanggalKadaluarsa(tgl)}',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        height: 1.15,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: warnaLatarBadgeStok,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${m.stok.jumlah} · $labelBadgeStok',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: warnaTeksBadgeStok,
+                    SizedBox(
+                      height: 40,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Wrap(
+                              spacing: 4,
+                              runSpacing: 2,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
                                   ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                                  decoration: BoxDecoration(
+                                    color: warnaLatarBadgeStok,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${m.stok.jumlah} · $labelBadgeStok',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: warnaTeksBadgeStok,
+                                          height: 1.05,
+                                        ),
+                                  ),
+                                ),
+                                if (statusKadaluarsa != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: latarKadaluarsa,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      statusKadaluarsa,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            color: teksKadaluarsa,
+                                            height: 1.05,
+                                          ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                        ),
-                        if (statusKadaluarsa != null) ...[
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: latarKadaluarsa,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                statusKadaluarsa,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      color: teksKadaluarsa,
-                                    ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                          IconButton(
+                            tooltip: m.produk.aktif == true
+                                ? 'Nonaktifkan produk'
+                                : 'Aktifkan (via edit)',
+                            visualDensity: VisualDensity.compact,
+                            iconSize: 30,
+                            icon: Icon(
+                              m.produk.aktif == true
+                                  ? Icons.toggle_on
+                                  : Icons.toggle_off,
+                              color: m.produk.aktif == true
+                                  ? WarnaSarypos.deepTeal
+                                  : WarnaSarypos.darkStone,
                             ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 48,
+                              minHeight: 40,
+                            ),
+                            onPressed: () => _konfirmasiNonaktifkan(m),
                           ),
                         ],
-                      ],
-                    ),
-                    const Spacer(),
-                    Align(
-                      alignment: Alignment.bottomLeft,
-                      child: IconButton(
-                        tooltip: m.produk.aktif == true
-                            ? 'Nonaktifkan produk'
-                            : 'Aktifkan (via edit)',
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 24,
-                        icon: Icon(
-                          m.produk.aktif == true
-                              ? Icons.toggle_on
-                              : Icons.toggle_off,
-                          color: m.produk.aktif == true
-                              ? WarnaSarypos.deepTeal
-                              : WarnaSarypos.darkStone,
-                        ),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 36,
-                          minHeight: 36,
-                        ),
-                        onPressed: () => _konfirmasiNonaktifkan(m),
                       ),
                     ),
                   ],
@@ -690,6 +696,7 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
             ),
           );
         },
+        ),
       );
     }
 
@@ -718,20 +725,14 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
             children: [
               TextField(
                 controller: _cari,
-                onChanged: (_) => _muat(),
-                style: gayaKontrol.copyWith(color: tema.colorScheme.onSurface),
-                decoration: InputDecoration(
-                  isDense: true,
+                onChanged: (_) => _jadwalkanMuatUlang(),
+                style: tema.textTheme.bodyMedium,
+                decoration: const InputDecoration(
                   hintText: 'Cari nama atau kategori',
-                  hintStyle: gayaKontrol.copyWith(color: tema.hintColor),
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  prefixIconConstraints: const BoxConstraints(
-                    minWidth: 40,
-                    minHeight: 36,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 0,
-                    vertical: 10,
+                  prefixIcon: Icon(Icons.search_rounded),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
                   ),
                 ),
               ),
@@ -763,12 +764,12 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
               ),
               const SizedBox(height: 4),
               SizedBox(
-                height: 34,
+                height: 40,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _chipFilter(
+                      ChipFilterSarypos(
                         label: 'Semua',
                         selected: _filterProduk == FilterProdukManajemen.semua,
                         onPilih: () {
@@ -779,7 +780,7 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
                         },
                       ),
                       const SizedBox(width: 6),
-                      _chipFilter(
+                      ChipFilterSarypos(
                         label: '≤7 hari',
                         selected:
                             _filterProduk ==
@@ -793,7 +794,7 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
                         },
                       ),
                       const SizedBox(width: 6),
-                      _chipFilter(
+                      ChipFilterSarypos(
                         label: 'Kedaluwarsa',
                         selected:
                             _filterProduk == FilterProdukManajemen.kedaluwarsa,
@@ -806,7 +807,7 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
                         },
                       ),
                       const SizedBox(width: 6),
-                      _chipFilter(
+                      ChipFilterSarypos(
                         label: 'Menipis',
                         selected:
                             _filterProduk == FilterProdukManajemen.stokMenipis,
@@ -819,7 +820,7 @@ class _HalamanDaftarProdukState extends State<HalamanDaftarProduk> {
                         },
                       ),
                       const SizedBox(width: 6),
-                      _chipFilter(
+                      ChipFilterSarypos(
                         label: 'Habis',
                         selected:
                             _filterProduk == FilterProdukManajemen.stokHabis,
@@ -958,30 +959,28 @@ class _DaftarProdukGridSkeleton extends StatelessWidget {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 0.65,
+        childAspectRatio: 0.80,
       ),
       itemBuilder: (context, indeks) {
         return CardSarypos(
+          tampilkanAksenDekoratif: false,
           child: Padding(
-            padding: const EdgeInsets.all(9),
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
             child: LayoutBuilder(
               builder: (context, c) {
                 final w = c.maxWidth;
                 return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.max,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    ClipRRect(
+                    Expanded(
+                      child: ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 100,
-                        child: SkeletonBox(
-                          width: w,
-                          height: 100,
-                          borderRadius: 10,
-                        ),
+                      child: SkeletonBox(
+                        width: w,
+                        height: double.infinity,
+                        borderRadius: 10,
                       ),
+                    ),
                     ),
                     const SizedBox(height: 8),
                     SkeletonLine(width: w * 0.85, height: 18, borderRadius: 10),

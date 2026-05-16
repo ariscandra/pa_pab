@@ -47,6 +47,8 @@ class CardRingkasan extends StatelessWidget {
                   Text(
                     nilaiUtama,
                     style: teksTema.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),

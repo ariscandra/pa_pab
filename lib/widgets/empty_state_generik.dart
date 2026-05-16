@@ -37,10 +37,33 @@ class EmptyStateGenerik extends StatelessWidget {
         final fontJudul = areaKecil ? 14.0 : null;
         final fontPesan = areaKecil ? 11.0 : null;
 
+        final skema = Theme.of(context).colorScheme;
+
+        final Widget? isiIkon = ikon == null
+            ? null
+            : areaKecil
+                ? Icon(ikon, size: iconSize, color: skema.onSurfaceVariant)
+                : Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: skema.surfaceContainerHighest.withValues(
+                        alpha: 0.65,
+                      ),
+                      border: Border.all(
+                        color: skema.outline.withValues(alpha: 0.28),
+                      ),
+                    ),
+                    child: Icon(
+                      ikon,
+                      size: iconSize,
+                      color: skema.onSurfaceVariant,
+                    ),
+                  );
         final teksPesan = Text(
           pesan,
           style: teksTema.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            color: skema.onSurfaceVariant,
             fontSize: fontPesan,
           ),
           textAlign: TextAlign.center,
@@ -58,13 +81,8 @@ class EmptyStateGenerik extends StatelessWidget {
                   : MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (ikon != null)
-                  Icon(
-                    ikon,
-                    size: iconSize,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                if (ikon != null) SizedBox(height: jarakIkon),
+                ?isiIkon,
+                if (isiIkon != null) SizedBox(height: jarakIkon),
                 if (judul != null)
                   Text(
                     judul!,
@@ -78,9 +96,16 @@ class EmptyStateGenerik extends StatelessWidget {
                   teksPesan,
                 if (onTekanTombol != null && labelTombol != null) ...[
                   SizedBox(height: jarakTombol),
-                  ElevatedButton(
-                    onPressed: onTekanTombol,
-                    child: Text(labelTombol!),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: onTekanTombol,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: Text(labelTombol!),
+                    ),
                   ),
                 ],
               ],

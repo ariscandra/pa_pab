@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:sarypos/config/theme/sarypos_theme.dart';
+import 'package:sarypos/widgets/appbar_sarypos.dart';
 import 'package:sarypos/widgets/card_sarypos.dart';
 
 class HalamanTentangSarypos extends StatefulWidget {
@@ -37,7 +38,7 @@ class _HalamanTentangSaryposState extends State<HalamanTentangSarypos> {
         : WarnaSarypos.warmGray.withValues(alpha: 0.7);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Tentang SaryPOS')),
+      appBar: const AppBarSarypos(judul: 'Tentang SaryPOS'),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),

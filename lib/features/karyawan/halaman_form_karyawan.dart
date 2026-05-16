@@ -18,8 +18,11 @@ import 'package:sarypos/data/models/pengguna_model.dart';
 import 'package:sarypos/data/models/profil_karyawan_model.dart';
 import 'package:sarypos/data/sources/pengguna_sumber.dart';
 import 'package:sarypos/data/sources/profil_karyawan_sumber.dart';
+import 'package:sarypos/core/format_rupiah.dart';
 import 'package:sarypos/widgets/snackbar_sarypos.dart';
 import 'package:sarypos/widgets/appbar_sarypos.dart';
+import 'package:sarypos/widgets/judul_bagian_sarypos.dart';
+import 'package:sarypos/widgets/skeleton_sarypos.dart';
 import 'package:http/http.dart' as http;
 
 String _namaPendekUntukEmail(String namaLengkap) {
@@ -93,14 +96,6 @@ String _sandiMudahDiingat() {
   final k = kata[r.nextInt(kata.length)];
   final pin = 1000 + r.nextInt(9000);
   return '$k$pin';
-}
-
-String _ringkasErrorUntukSnackbar(Object e) {
-  final t = e.toString().trim();
-  if (t.length <= 280) {
-    return t;
-  }
-  return '${t.substring(0, 280)}…';
 }
 
 int? _parseBilanganNonNegatifOpsional(String? teks) {
@@ -368,10 +363,7 @@ class _HalamanFormKaryawanTambahState extends State<HalamanFormKaryawanTambah> {
       tampilkanSnackbarSarypos(
         context,
         tipe: TipeSnackbarSarypos.error,
-        pesan:
-            'Gagal menambah karyawan.\n${_ringkasErrorUntukSnackbar(e)}\n\n'
-            'Pastikan SUPABASE_SERVICE_ROLE_KEY terset di .env (jangan dipublikasikan). '
-            'Jika ada teks RLS: jalankan migrasi SQL yang disarankan di dokumentasi proyek.',
+        pesan: 'Gagal menambah karyawan. Periksa koneksi atau pengaturan server.',
       );
     } finally {
       if (mounted) {
@@ -399,6 +391,8 @@ class _HalamanFormKaryawanTambahState extends State<HalamanFormKaryawanTambah> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const JudulBagianSarypos(judul: 'Data karyawan'),
+                  const SizedBox(height: 12),
                   TextFormField(
                     controller: _nama,
                     decoration: const InputDecoration(
@@ -410,12 +404,7 @@ class _HalamanFormKaryawanTambahState extends State<HalamanFormKaryawanTambah> {
                         (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    'Profil HR (Opsional)',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: warnaAksenJudulBagian(context),
-                    ),
-                  ),
+                  const JudulBagianSarypos(judul: 'Profil HR (opsional)'),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _jabatan,
@@ -429,8 +418,12 @@ class _HalamanFormKaryawanTambahState extends State<HalamanFormKaryawanTambah> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _gaji,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Gaji bulanan (Rp)',
+                      hintText: _gaji.text.trim().isEmpty
+                          ? 'Contoh: ${formatRupiah(2500000)}'
+                          : null,
+                      helperText: 'Opsional · angka bulat',
                     ),
                     enabled: !_sedangMenyimpan,
                     keyboardType: TextInputType.number,
@@ -438,37 +431,26 @@ class _HalamanFormKaryawanTambahState extends State<HalamanFormKaryawanTambah> {
                     validator: (v) =>
                         _validasiBilanganNonNegatifOpsional(v, 'Gaji bulanan'),
                   ),
-                  const SizedBox(height: 8),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Mulai Bekerja'),
-                    subtitle: Text(
-                      _mulaiKerja == null
-                          ? 'Belum diatur'
-                          : fTanggal.format(_mulaiKerja!),
-                    ),
-                    trailing: IconButton(
-                      constraints: const BoxConstraints(
-                        minWidth: 48,
-                        minHeight: 48,
-                      ),
-                      icon: const Icon(Icons.calendar_today_outlined),
-                      onPressed: _sedangMenyimpan
-                          ? null
-                          : () async {
-                              final t = await showDatePicker(
-                                context: context,
-                                initialDate: _mulaiKerja ?? DateTime.now(),
-                                firstDate: DateTime(1990),
-                                lastDate: DateTime.now().add(
-                                  const Duration(days: 365 * 2),
-                                ),
-                              );
-                              if (t != null) {
-                                setState(() => _mulaiKerja = t);
-                              }
-                            },
-                    ),
+                  const SizedBox(height: 12),
+                  _BarisTanggalMulaiKerja(
+                    label: 'Mulai bekerja',
+                    teksTanggal: _mulaiKerja == null
+                        ? 'Ketuk untuk memilih (opsional)'
+                        : fTanggal.format(_mulaiKerja!),
+                    sedangMenyimpan: _sedangMenyimpan,
+                    onPilih: () async {
+                      final t = await showDatePicker(
+                        context: context,
+                        initialDate: _mulaiKerja ?? DateTime.now(),
+                        firstDate: DateTime(1990),
+                        lastDate: DateTime.now().add(
+                          const Duration(days: 365 * 2),
+                        ),
+                      );
+                      if (t != null) {
+                        setState(() => _mulaiKerja = t);
+                      }
+                    },
                   ),
                   DropdownButtonFormField<int>(
                     key: ValueKey(_hariGajian),
@@ -502,15 +484,17 @@ class _HalamanFormKaryawanTambahState extends State<HalamanFormKaryawanTambah> {
                     inputFormatters: [TanpaEmojiFormatter()],
                     maxLines: 3,
                   ),
+                  const SizedBox(height: 16),
+                  const JudulBagianSarypos(judul: 'Foto karyawan'),
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _sedangMenyimpan ? null : _pilihFoto,
-                    icon: const Icon(Icons.photo_camera_outlined),
-                    label: Text(
-                      _fotoBaruBytes != null
-                          ? 'Foto dipilih (ketuk untuk ganti)'
-                          : 'Pilih foto karyawan',
-                    ),
+                  _BagianFotoKaryawan(
+                    fotoBaru: _fotoBaruBytes,
+                    fotoUrl: null,
+                    sedangMenyimpan: _sedangMenyimpan,
+                    onPilih: _pilihFoto,
+                    onHapusBaru: _fotoBaruBytes != null
+                        ? () => setState(() => _fotoBaruBytes = null)
+                        : null,
                   ),
                 ],
               ),
@@ -518,17 +502,15 @@ class _HalamanFormKaryawanTambahState extends State<HalamanFormKaryawanTambah> {
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
+              child: FilledButton(
                 onPressed: _sedangMenyimpan ? null : _simpan,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: WarnaSarypos.saryRed,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
                 ),
                 child: _sedangMenyimpan
                     ? SizedBox(
-                        height: 20,
-                        width: 20,
+                        height: 22,
+                        width: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Theme.of(context).colorScheme.onPrimary,
@@ -616,7 +598,7 @@ class _HalamanFormKaryawanEditState extends State<HalamanFormKaryawanEdit> {
           context,
           tipe: TipeSnackbarSarypos.error,
           pesan:
-              'Gagal menyinkronkan kredensial ke Supabase Auth.\n${_ringkasErrorUntukSnackbar(e)}',
+              'Gagal menyinkronkan kredensial login. Periksa koneksi.',
         );
       }
     });
@@ -917,9 +899,7 @@ class _HalamanFormKaryawanEditState extends State<HalamanFormKaryawanEdit> {
       tampilkanSnackbarSarypos(
         context,
         tipe: TipeSnackbarSarypos.error,
-        pesan:
-            'Gagal menyimpan.\n${_ringkasErrorUntukSnackbar(e)}\n\n'
-            'Jika RLS / Storage: jalankan 20260326130200_app_kuliah_longgar_rls.sql di Supabase.',
+        pesan: 'Gagal menyimpan perubahan. Periksa koneksi.',
       );
     } finally {
       if (mounted) {
@@ -997,7 +977,7 @@ class _HalamanFormKaryawanEditState extends State<HalamanFormKaryawanEdit> {
         ],
       ),
       body: _sedangMuat
-          ? const Center(child: CircularProgressIndicator())
+          ? const SafeArea(child: _SkeletonFormKaryawanEdit())
           : SafeArea(
               child: Form(
                 key: _kunciForm,
@@ -1009,33 +989,35 @@ class _HalamanFormKaryawanEditState extends State<HalamanFormKaryawanEdit> {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Kredensial login',
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(
-                                  color: warnaAksenJudulBagian(context),
-                                  fontWeight: FontWeight.w600,
-                                ),
+                    JudulBagianSarypos(
+                      judul: 'Kredensial login',
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Salin email dan kata sandi',
+                            constraints: const BoxConstraints(
+                              minWidth: 44,
+                              minHeight: 44,
+                            ),
+                            icon: const Icon(Icons.copy_outlined),
+                            onPressed: _sedangMenyimpan
+                                ? null
+                                : _salinEmailDanSandiGabungan,
                           ),
-                        ),
-                        IconButton(
-                          tooltip: 'Salin email dan kata sandi',
-                          icon: const Icon(Icons.copy_outlined),
-                          onPressed: _sedangMenyimpan
-                              ? null
-                              : _salinEmailDanSandiGabungan,
-                        ),
-                        IconButton(
-                          tooltip: 'Sunting kredensial',
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: _sedangMenyimpan
-                              ? null
-                              : _ketukSuntingKredensial,
-                        ),
-                      ],
+                          IconButton(
+                            tooltip: 'Sunting kredensial',
+                            constraints: const BoxConstraints(
+                              minWidth: 44,
+                              minHeight: 44,
+                            ),
+                            icon: const Icon(Icons.edit_outlined),
+                            onPressed: _sedangMenyimpan
+                                ? null
+                                : _ketukSuntingKredensial,
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -1085,7 +1067,9 @@ class _HalamanFormKaryawanEditState extends State<HalamanFormKaryawanEdit> {
                       },
                     ),
                     const Divider(height: 24, thickness: 1),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
+                    const JudulBagianSarypos(judul: 'Data karyawan'),
+                    const SizedBox(height: 12),
                     TextFormField(
                       controller: _nama,
                       decoration: const InputDecoration(
@@ -1110,8 +1094,12 @@ class _HalamanFormKaryawanEditState extends State<HalamanFormKaryawanEdit> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _gaji,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Gaji bulanan (Rp)',
+                        hintText: _gaji.text.trim().isEmpty
+                            ? 'Contoh: ${formatRupiah(2500000)}'
+                            : null,
+                        helperText: 'Opsional · angka bulat',
                       ),
                       enabled: !_sedangMenyimpan,
                       keyboardType: TextInputType.number,
@@ -1121,37 +1109,26 @@ class _HalamanFormKaryawanEditState extends State<HalamanFormKaryawanEdit> {
                         'Gaji bulanan',
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Mulai Bekerja'),
-                      subtitle: Text(
-                        _mulaiKerja == null
-                            ? 'Belum diatur'
-                            : fTanggal.format(_mulaiKerja!),
-                      ),
-                      trailing: IconButton(
-                        constraints: const BoxConstraints(
-                          minWidth: 48,
-                          minHeight: 48,
-                        ),
-                        icon: const Icon(Icons.calendar_today_outlined),
-                        onPressed: _sedangMenyimpan
-                            ? null
-                            : () async {
-                                final t = await showDatePicker(
-                                  context: context,
-                                  initialDate: _mulaiKerja ?? DateTime.now(),
-                                  firstDate: DateTime(1990),
-                                  lastDate: DateTime.now().add(
-                                    const Duration(days: 365 * 2),
-                                  ),
-                                );
-                                if (t != null) {
-                                  setState(() => _mulaiKerja = t);
-                                }
-                              },
-                      ),
+                    const SizedBox(height: 12),
+                    _BarisTanggalMulaiKerja(
+                      label: 'Mulai bekerja',
+                      teksTanggal: _mulaiKerja == null
+                          ? 'Ketuk untuk memilih (opsional)'
+                          : fTanggal.format(_mulaiKerja!),
+                      sedangMenyimpan: _sedangMenyimpan,
+                      onPilih: () async {
+                        final t = await showDatePicker(
+                          context: context,
+                          initialDate: _mulaiKerja ?? DateTime.now(),
+                          firstDate: DateTime(1990),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 365 * 2),
+                          ),
+                        );
+                        if (t != null) {
+                          setState(() => _mulaiKerja = t);
+                        }
+                      },
                     ),
                     DropdownButtonFormField<int>(
                       key: ValueKey(_hariGajian),
@@ -1188,59 +1165,29 @@ class _HalamanFormKaryawanEditState extends State<HalamanFormKaryawanEdit> {
                       maxLines: 3,
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        if (_profil?.fotoUrl != null && _fotoBaruBytes == null)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              _profil!.fotoUrl!,
-                              width: 72,
-                              height: 72,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => const SizedBox(
-                                width: 72,
-                                height: 72,
-                                child: Icon(Icons.broken_image_outlined),
-                              ),
-                            ),
-                          ),
-                        if (_fotoBaruBytes != null)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.memory(
-                              _fotoBaruBytes!,
-                              width: 72,
-                              height: 72,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _sedangMenyimpan ? null : _pilihFoto,
-                            icon: const Icon(Icons.photo_camera_outlined),
-                            label: const Text('Pilih foto'),
-                          ),
-                        ),
-                      ],
+                    const JudulBagianSarypos(judul: 'Foto karyawan'),
+                    const SizedBox(height: 12),
+                    _BagianFotoKaryawan(
+                      fotoBaru: _fotoBaruBytes,
+                      fotoUrl: _fotoBaruBytes == null ? _profil?.fotoUrl : null,
+                      sedangMenyimpan: _sedangMenyimpan,
+                      onPilih: _pilihFoto,
+                      onHapusBaru: _fotoBaruBytes != null
+                          ? () => setState(() => _fotoBaruBytes = null)
+                          : null,
                     ),
                     const SizedBox(height: 28),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
+                      child: FilledButton(
                         onPressed: _sedangMenyimpan ? null : _simpan,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: WarnaSarypos.saryRed,
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.onPrimary,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
                         ),
                         child: _sedangMenyimpan
                             ? SizedBox(
-                                height: 20,
-                                width: 20,
+                                height: 22,
+                                width: 22,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                   color: Theme.of(
@@ -1255,6 +1202,165 @@ class _HalamanFormKaryawanEditState extends State<HalamanFormKaryawanEdit> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _SkeletonFormKaryawanEdit extends StatelessWidget {
+  const _SkeletonFormKaryawanEdit();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth;
+        return ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            SkeletonLine(width: w, height: 14),
+            const SizedBox(height: 8),
+            SkeletonLine(width: w * 0.72, height: 12),
+            const SizedBox(height: 20),
+            SkeletonLine(width: w * 0.4, height: 14),
+            const SizedBox(height: 12),
+            SkeletonBox(width: w, height: 52, borderRadius: 12),
+            const SizedBox(height: 12),
+            SkeletonBox(width: w, height: 52, borderRadius: 12),
+            const SizedBox(height: 20),
+            SkeletonLine(width: w * 0.35, height: 14),
+            const SizedBox(height: 12),
+            SkeletonBox(width: w, height: 52, borderRadius: 12),
+            const SizedBox(height: 12),
+            SkeletonBox(width: w, height: 96, borderRadius: 12),
+            const SizedBox(height: 28),
+            SkeletonBox(width: w, height: 52, borderRadius: 12),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BarisTanggalMulaiKerja extends StatelessWidget {
+  const _BarisTanggalMulaiKerja({
+    required this.label,
+    required this.teksTanggal,
+    required this.sedangMenyimpan,
+    required this.onPilih,
+  });
+
+  final String label;
+  final String teksTanggal;
+  final bool sedangMenyimpan;
+  final VoidCallback onPilih;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: sedangMenyimpan ? null : onPilih,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          child: Row(
+            children: [
+              Icon(Icons.event_outlined, color: WarnaSarypos.deepTeal),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: Theme.of(context).textTheme.labelLarge),
+                    const SizedBox(height: 2),
+                    Text(
+                      teksTanggal,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BagianFotoKaryawan extends StatelessWidget {
+  const _BagianFotoKaryawan({
+    required this.fotoBaru,
+    required this.fotoUrl,
+    required this.sedangMenyimpan,
+    required this.onPilih,
+    this.onHapusBaru,
+  });
+
+  final Uint8List? fotoBaru;
+  final String? fotoUrl;
+  final bool sedangMenyimpan;
+  final VoidCallback onPilih;
+  final VoidCallback? onHapusBaru;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 96,
+            height: 96,
+            child: fotoBaru != null
+                ? Image.memory(fotoBaru!, fit: BoxFit.cover)
+                : fotoUrl != null && fotoUrl!.isNotEmpty
+                ? Image.network(
+                    fotoUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _placeholderFoto(context),
+                  )
+                : _placeholderFoto(context),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              OutlinedButton.icon(
+                onPressed: sedangMenyimpan ? null : onPilih,
+                icon: const Icon(Icons.photo_camera_outlined),
+                label: const Text('Pilih foto'),
+              ),
+              if (onHapusBaru != null) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: sedangMenyimpan ? null : onHapusBaru,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Hapus foto baru'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _placeholderFoto(BuildContext context) {
+    return ColoredBox(
+      color: WarnaSarypos.warmGray.withValues(alpha: 0.35),
+      child: Icon(
+        Icons.person_outline,
+        size: 40,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
     );
   }
 }

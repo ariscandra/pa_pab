@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:sarypos/config/inset_nav_utama.dart';
 import 'package:sarypos/config/theme/sarypos_theme.dart';
+import 'package:sarypos/core/pengatur_sesi.dart';
 import 'package:sarypos/core/penjaga_rute_owner.dart';
 import 'package:sarypos/core/warisan_sesi.dart';
 import 'package:sarypos/features/auth/halaman_daftar_owner.dart';
@@ -10,10 +12,99 @@ import 'package:sarypos/features/pengaturan/panel_transaksi_terakhir_karyawan.da
 import 'package:sarypos/features/laporan/halaman_laporan_penjualan.dart';
 import 'package:sarypos/features/pengaturan/halaman_tentang_sarypos.dart';
 import 'package:sarypos/widgets/card_sarypos.dart';
+import 'package:sarypos/widgets/dialog_konfirmasi_sarypos.dart';
+import 'package:sarypos/widgets/judul_bagian_sarypos.dart';
 import 'package:sarypos/widgets/snackbar_sarypos.dart';
 
-class HalamanUserPengaturan extends StatelessWidget {
+class HalamanUserPengaturan extends StatefulWidget {
   const HalamanUserPengaturan({super.key});
+
+  @override
+  State<HalamanUserPengaturan> createState() => _HalamanUserPengaturanState();
+}
+
+class _HalamanUserPengaturanState extends State<HalamanUserPengaturan> {
+  bool _sedangKeluar = false;
+
+  Future<void> _keluarAkun({
+    required PengaturSesi sesi,
+    required bool pemilik,
+  }) async {
+    if (_sedangKeluar) return;
+    final setuju = await tampilkanDialogKonfirmasiSarypos(
+      context,
+      judul: pemilik ? 'Keluar dari akun pemilik?' : 'Keluar dari akun?',
+      pesan: pemilik
+          ? 'Anda kembali ke mode karyawan/staff. Data toko tetap tersimpan.'
+          : 'Anda perlu masuk lagi untuk mencatat transaksi atas nama akun ini.',
+      labelLanjut: 'Keluar',
+      destruktif: true,
+    );
+    if (!setuju || !mounted) return;
+
+    setState(() => _sedangKeluar = true);
+    final err = await sesi.keluar();
+    if (!mounted) return;
+    setState(() => _sedangKeluar = false);
+
+    if (err != null) {
+      tampilkanSnackbarSarypos(
+        context,
+        tipe: TipeSnackbarSarypos.error,
+        pesan: err,
+      );
+    } else {
+      tampilkanSnackbarSarypos(
+        context,
+        tipe: TipeSnackbarSarypos.sukses,
+        pesan: pemilik
+            ? 'Anda kembali dalam mode karyawan/staff.'
+            : 'Anda keluar dari akun.',
+      );
+    }
+  }
+
+  Widget _kartuMenu(List<Widget> anak) {
+    return CardSarypos(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: anak,
+      ),
+    );
+  }
+
+  Widget _tileMenu({
+    required IconData ikon,
+    required String judul,
+    String? subtitle,
+    Color? warnaIkon,
+    Color? warnaJudul,
+    bool sedangMemuat = false,
+    VoidCallback? onTap,
+  }) {
+    return ListTile(
+      minVerticalPadding: 12,
+      leading: sedangMemuat
+          ? SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: warnaIkon ?? Theme.of(context).colorScheme.primary,
+              ),
+            )
+          : Icon(ikon, color: warnaIkon),
+      title: Text(
+        judul,
+        style: warnaJudul != null ? TextStyle(color: warnaJudul) : null,
+      ),
+      subtitle: subtitle != null ? Text(subtitle) : null,
+      trailing: sedangMemuat
+          ? null
+          : const Icon(Icons.chevron_right_rounded),
+      onTap: sedangMemuat ? null : onTap,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,11 +115,12 @@ class HalamanUserPengaturan extends StatelessWidget {
 
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: InsetNavUtama.paddingKontenTab(context),
         children: [
           if (p != null) ...[
             CardSarypos(
               child: ListTile(
+                minVerticalPadding: 12,
                 leading: CircleAvatar(
                   backgroundColor: WarnaSarypos.deepTeal,
                   foregroundColor: tema.colorScheme.onTertiary,
@@ -57,172 +149,132 @@ class HalamanUserPengaturan extends StatelessWidget {
             const SizedBox(height: 12),
           ],
           if (!owner) ...[
-            if (p == null) ...[
-              ListTile(
-                leading: const Icon(Icons.store_mall_directory_outlined),
-                title: const Text('Masuk'),
-                subtitle: const Text('Masuk sebagai pemilik atau karyawan'),
-                trailing: const Icon(Icons.chevron_right),
+            _kartuMenu([
+              if (p == null)
+                _tileMenu(
+                  ikon: Icons.store_mall_directory_outlined,
+                  judul: 'Masuk',
+                  subtitle: 'Masuk sebagai pemilik atau karyawan',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            HalamanLogin(pengatur: sesi, dariTabSaya: true),
+                      ),
+                    );
+                  },
+                ),
+              if (p == null) const Divider(height: 1),
+              _tileMenu(
+                ikon: Icons.info_outline_rounded,
+                judul: 'Tentang SaryPOS',
+                subtitle: 'Profil aplikasi dan tim pengembang',
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) =>
-                          HalamanLogin(pengatur: sesi, dariTabSaya: true),
+                      builder: (_) => const HalamanTentangSarypos(),
                     ),
                   );
                 },
               ),
-              const Divider(height: 1),
-            ],
-            ListTile(
-              leading: const Icon(Icons.info_outline_rounded),
-              title: const Text('Tentang SaryPOS'),
-              subtitle: const Text('Profil aplikasi dan tim pengembang'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const HalamanTentangSarypos(),
-                  ),
-                );
-              },
-            ),
-            if (p != null) ...[
-              const Divider(height: 1),
-              ListTile(
-                leading: Icon(Icons.logout, color: tema.colorScheme.error),
-                title: Text(
-                  'Keluar Dari Akun',
-                  style: TextStyle(color: tema.colorScheme.error),
+              if (p != null) ...[
+                const Divider(height: 1),
+                _tileMenu(
+                  ikon: Icons.logout,
+                  judul: 'Keluar dari akun',
+                  subtitle: 'Anda keluar dari akun ini',
+                  warnaIkon: tema.colorScheme.error,
+                  warnaJudul: tema.colorScheme.error,
+                  sedangMemuat: _sedangKeluar,
+                  onTap: () => _keluarAkun(sesi: sesi, pemilik: false),
                 ),
-                subtitle: const Text('Anda keluar dari akun ini.'),
-                onTap: () async {
-                  final err = await sesi.keluar();
-                  if (!context.mounted) {
-                    return;
-                  }
-                  if (err != null) {
-                    tampilkanSnackbarSarypos(
-                      context,
-                      tipe: TipeSnackbarSarypos.error,
-                      pesan: err,
+              ],
+              if (sesi.adaOwnerAktif == false) ...[
+                const Divider(height: 1),
+                _tileMenu(
+                  ikon: Icons.person_add_alt_1,
+                  judul: 'Daftar pemilik toko (pertama kali)',
+                  subtitle: 'Sekali saja. Setelahnya gunakan masuk pemilik.',
+                  warnaIkon: tema.colorScheme.error,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => HalamanDaftarOwner(pengatur: sesi),
+                      ),
                     );
-                  } else {
-                    tampilkanSnackbarSarypos(
-                      context,
-                      tipe: TipeSnackbarSarypos.sukses,
-                      pesan: 'Anda keluar dari akun.',
-                    );
-                  }
-                },
-              ),
-            ],
-            if (sesi.adaOwnerAktif == false)
-              ListTile(
-                leading: Icon(
-                  Icons.person_add_alt_1,
-                  color: tema.colorScheme.error,
+                  },
                 ),
-                title: const Text('Daftar Pemilik Toko (Pertama Kali)'),
-                subtitle: const Text(
-                  'Sekali saja. Setelahnya gunakan masuk pemilik.',
-                ),
-                trailing: const Icon(Icons.chevron_right),
+              ],
+            ]),
+            const SizedBox(height: 24),
+          ],
+          if (owner) ...[
+            _kartuMenu([
+              _tileMenu(
+                ikon: Icons.info_outline_rounded,
+                judul: 'Tentang SaryPOS',
+                subtitle: 'Profil aplikasi dan tim pengembang',
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => HalamanDaftarOwner(pengatur: sesi),
+                      builder: (_) => const HalamanTentangSarypos(),
                     ),
                   );
                 },
               ),
-            const Divider(height: 32),
-          ],
-          if (owner) ...[
-            ListTile(
-              leading: const Icon(Icons.info_outline_rounded),
-              title: const Text('Tentang SaryPOS'),
-              subtitle: const Text('Profil aplikasi dan tim pengembang'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const HalamanTentangSarypos(),
-                  ),
-                );
-              },
-            ),
-            const Divider(height: 24),
-          ],
-          if (owner) ...[
-            Text(
-              'Manajemen',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: warnaAksenJudulBagian(context),
-              ),
-            ),
+            ]),
+            const SizedBox(height: 20),
+            const JudulBagianSarypos(judul: 'Manajemen'),
             const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.assessment_outlined),
-              title: const Text('Laporan Penjualan'),
-              subtitle: const Text('Periode & ekspor PDF'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                dorongJikaOwner(
-                  context,
-                  (_) => const HalamanLaporanPenjualan(),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.groups_outlined),
-              title: const Text('Karyawan & HR'),
-              subtitle: const Text('Gaji, jadwal, foto, ID card'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                dorongJikaOwner(context, (_) => const HalamanDaftarKaryawan());
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.history),
-              title: const Text('Log Aktivitas'),
-              subtitle: const Text('Riwayat peristiwa penting di toko'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                dorongJikaOwner(context, (_) => const HalamanLogAktivitas());
-              },
-            ),
-            const Divider(height: 32),
-            ListTile(
-              leading: Icon(Icons.logout, color: tema.colorScheme.error),
-              title: Text(
-                'Keluar Dari Akun Pemilik',
-                style: TextStyle(color: tema.colorScheme.error),
-              ),
-              subtitle: const Text(
-                'Kembali ke mode karyawan/staff, data toko tetap ada.',
-              ),
-              onTap: () async {
-                final err = await sesi.keluar();
-                if (!context.mounted) {
-                  return;
-                }
-                if (err != null) {
-                  tampilkanSnackbarSarypos(
+            _kartuMenu([
+              _tileMenu(
+                ikon: Icons.assessment_outlined,
+                judul: 'Laporan penjualan',
+                subtitle: 'Periode & ekspor PDF',
+                onTap: () {
+                  dorongJikaOwner(
                     context,
-                    tipe: TipeSnackbarSarypos.error,
-                    pesan: err,
+                    (_) => const HalamanLaporanPenjualan(),
                   );
-                } else {
-                  tampilkanSnackbarSarypos(
+                },
+              ),
+              const Divider(height: 1),
+              _tileMenu(
+                ikon: Icons.groups_outlined,
+                judul: 'Karyawan & HR',
+                subtitle: 'Gaji, jadwal, foto, ID card',
+                onTap: () {
+                  dorongJikaOwner(
                     context,
-                    tipe: TipeSnackbarSarypos.sukses,
-                    pesan: 'Anda kembali dalam mode karyawan/staff.',
+                    (_) => const HalamanDaftarKaryawan(),
                   );
-                }
-              },
-            ),
-            const Divider(),
+                },
+              ),
+              const Divider(height: 1),
+              _tileMenu(
+                ikon: Icons.history,
+                judul: 'Log aktivitas',
+                subtitle: 'Riwayat peristiwa penting di toko',
+                onTap: () {
+                  dorongJikaOwner(
+                    context,
+                    (_) => const HalamanLogAktivitas(),
+                  );
+                },
+              ),
+            ]),
+            const SizedBox(height: 20),
+            _kartuMenu([
+              _tileMenu(
+                ikon: Icons.logout,
+                judul: 'Keluar dari akun pemilik',
+                subtitle: 'Kembali ke mode karyawan/staff',
+                warnaIkon: tema.colorScheme.error,
+                warnaJudul: tema.colorScheme.error,
+                sedangMemuat: _sedangKeluar,
+                onTap: () => _keluarAkun(sesi: sesi, pemilik: true),
+              ),
+            ]),
           ],
         ],
       ),

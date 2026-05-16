@@ -9,7 +9,9 @@ import 'package:sarypos/core/formatter_tanpa_emoji.dart';
 import 'package:sarypos/core/warisan_sesi.dart';
 import 'package:sarypos/data/models/produk_inventaris_model.dart';
 import 'package:sarypos/data/sources/produk_dan_stok_sumber.dart';
+import 'package:sarypos/core/format_rupiah.dart';
 import 'package:sarypos/widgets/appbar_sarypos.dart';
+import 'package:sarypos/widgets/judul_bagian_sarypos.dart';
 import 'package:sarypos/widgets/snackbar_sarypos.dart';
 
 class HalamanFormProduk extends StatefulWidget {
@@ -34,6 +36,7 @@ class _HalamanFormProdukState extends State<HalamanFormProduk> {
   final _batasKritis = TextEditingController();
 
   bool _sedangMenyimpan = false;
+  bool _errorTanggal = false;
   DateTime? _tanggalKadaluarsa;
   bool _aktif = true;
 
@@ -199,7 +202,17 @@ class _HalamanFormProdukState extends State<HalamanFormProduk> {
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
     );
     if (t == null) return;
-    setState(() => _tanggalKadaluarsa = t);
+    setState(() {
+      _tanggalKadaluarsa = t;
+      _errorTanggal = false;
+    });
+  }
+
+  void _hapusGambar() {
+    setState(() {
+      _fotoBaruBytes = null;
+      _fotoBaruEkstensi = null;
+    });
   }
 
   Future<void> _simpan() async {
@@ -207,11 +220,7 @@ class _HalamanFormProdukState extends State<HalamanFormProduk> {
     final valid = _kunciForm.currentState?.validate() ?? false;
     if (!valid) return;
     if (_tanggalKadaluarsa == null) {
-      tampilkanSnackbarSarypos(
-        context,
-        tipe: TipeSnackbarSarypos.error,
-        pesan: 'Tanggal kadaluarsa wajib diisi.',
-      );
+      setState(() => _errorTanggal = true);
       return;
     }
 
@@ -220,14 +229,6 @@ class _HalamanFormProdukState extends State<HalamanFormProduk> {
       final nama = _nama.text.trim();
       final harga = _parseIntNonNegatif(_harga.text) ?? 0;
       final kategori = _kategori.text.trim();
-      if (kategori.isEmpty) {
-        tampilkanSnackbarSarypos(
-          context,
-          tipe: TipeSnackbarSarypos.error,
-          pesan: 'Kategori wajib diisi.',
-        );
-        return;
-      }
       final stokJumlah = _parseIntNonNegatif(_stok.text) ?? 0;
       final batasKritis = _parseIntNonNegatif(_batasKritis.text) ?? 0;
 
@@ -291,12 +292,8 @@ class _HalamanFormProdukState extends State<HalamanFormProduk> {
           child: ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              Text(
-                'Isi data produk. Unggah gambar dari kamera atau galeri (di web memakai pemilih file).',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 20),
-
+              const JudulBagianSarypos(judul: 'Data produk'),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _nama,
                 enabled: !_sedangMenyimpan,
@@ -358,7 +355,13 @@ class _HalamanFormProdukState extends State<HalamanFormProduk> {
               TextFormField(
                 controller: _harga,
                 enabled: !_sedangMenyimpan,
-                decoration: const InputDecoration(labelText: 'Harga (Rp)'),
+                decoration: InputDecoration(
+                  labelText: 'Harga (Rp)',
+                  hintText: _harga.text.trim().isEmpty
+                      ? 'Contoh: ${formatRupiah(15000)}'
+                      : null,
+                  helperText: 'Angka bulat tanpa titik',
+                ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [TanpaEmojiFormatter()],
                 validator: (v) {
@@ -367,34 +370,73 @@ class _HalamanFormProdukState extends State<HalamanFormProduk> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
-
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Tanggal Kadaluarsa'),
-                subtitle: Text(
-                  _tanggalKadaluarsa == null
-                      ? 'Belum dipilih'
-                      : f.format(_tanggalKadaluarsa!),
-                ),
-                trailing: IconButton(
-                  constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 48,
+              const SizedBox(height: 20),
+              const JudulBagianSarypos(judul: 'Stok'),
+              const SizedBox(height: 12),
+              Material(
+                color: _errorTanggal
+                    ? Theme.of(context).colorScheme.errorContainer.withValues(
+                        alpha: 0.35,
+                      )
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: _sedangMenyimpan ? null : _pilihTanggalKadaluarsa,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.event_outlined,
+                          color: _errorTanggal
+                              ? Theme.of(context).colorScheme.error
+                              : WarnaSarypos.deepTeal,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Tanggal kadaluarsa',
+                                style: Theme.of(context).textTheme.labelLarge,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _tanggalKadaluarsa == null
+                                    ? 'Ketuk untuk memilih'
+                                    : f.format(_tanggalKadaluarsa!),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded),
+                      ],
+                    ),
                   ),
-                  icon: const Icon(Icons.calendar_today_outlined),
-                  onPressed: _sedangMenyimpan ? null : _pilihTanggalKadaluarsa,
                 ),
               ),
-              const SizedBox(height: 6),
-              if (_tanggalKadaluarsa == null)
+              if (_errorTanggal) ...[
+                const SizedBox(height: 6),
                 Text(
-                  'Wajib diisi agar beranda bisa menampilkan produk yang mendekati kadaluarsa.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  'Tanggal kadaluarsa wajib diisi.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
+              ],
 
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _stok,
                 enabled: !_sedangMenyimpan,
@@ -440,49 +482,67 @@ class _HalamanFormProdukState extends State<HalamanFormProduk> {
                     : (v) => setState(() => _aktif = v),
               ),
 
-              const SizedBox(height: 16),
-              Text(
-                'Gambar Produk',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              const SizedBox(height: 8),
-
+              const SizedBox(height: 20),
+              const JudulBagianSarypos(judul: 'Gambar produk'),
+              const SizedBox(height: 12),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_fotoBaruBytes != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.memory(
-                        _fotoBaruBytes!,
-                        width: 72,
-                        height: 72,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  else if (_gambarUrlLama != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.network(
-                        _gambarUrlLama!,
-                        width: 72,
-                        height: 72,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const SizedBox(
-                            width: 72,
-                            height: 72,
-                            child: Icon(Icons.broken_image_outlined),
-                          );
-                        },
-                      ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: 96,
+                      height: 96,
+                      child: _fotoBaruBytes != null
+                          ? Image.memory(_fotoBaruBytes!, fit: BoxFit.cover)
+                          : _gambarUrlLama != null
+                          ? Image.network(
+                              _gambarUrlLama!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return ColoredBox(
+                                  color: WarnaSarypos.warmGray.withValues(
+                                    alpha: 0.35,
+                                  ),
+                                  child: const Icon(
+                                    Icons.broken_image_outlined,
+                                  ),
+                                );
+                              },
+                            )
+                          : ColoredBox(
+                              color: WarnaSarypos.warmGray.withValues(
+                                alpha: 0.35,
+                              ),
+                              child: Icon(
+                                Icons.inventory_2_outlined,
+                                size: 36,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
                     ),
-                  if (_fotoBaruBytes != null || _gambarUrlLama != null)
-                    const SizedBox(width: 12),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _sedangMenyimpan ? null : _pilihGambar,
-                      icon: const Icon(Icons.photo_camera_outlined),
-                      label: const Text('Pilih gambar'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _sedangMenyimpan ? null : _pilihGambar,
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          label: const Text('Pilih gambar'),
+                        ),
+                        if (_fotoBaruBytes != null) ...[
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: _sedangMenyimpan ? null : _hapusGambar,
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('Hapus gambar baru'),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],

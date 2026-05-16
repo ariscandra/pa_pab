@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:sarypos/config/theme/sarypos_theme.dart';
+import 'package:sarypos/core/bantuan_tawarkan_biometrik_owner.dart';
 import 'package:sarypos/core/pengatur_sesi.dart';
+import 'package:sarypos/core/penyimpanan_biometrik_owner.dart';
 import 'package:sarypos/core/formatter_tanpa_emoji.dart';
 import 'package:sarypos/features/auth/halaman_daftar_owner.dart';
 import 'package:sarypos/widgets/appbar_sarypos.dart';
@@ -24,10 +27,32 @@ class _HalamanLoginState extends State<HalamanLogin> {
   final _kunciForm = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _sandi = TextEditingController();
+  final _buahLokal = LocalAuthentication();
+
   bool _sedangMasuk = false;
+  bool _punyaMasukBiometrik = false;
+  bool _sembunyikanSandi = true;
 
   bool _validEmail(String email) {
     return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _perbaruiRiwayatBiometrik();
+  }
+
+  Future<void> _perbaruiRiwayatBiometrik() async {
+    final penyimpanan = PenyimpananBiometrikOwner();
+    final aktif = await penyimpanan.biometrikDiaktifkan();
+    final kredensial = await penyimpanan.bacaKredensial();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _punyaMasukBiometrik = aktif && kredensial != null;
+    });
   }
 
   @override
@@ -35,6 +60,84 @@ class _HalamanLoginState extends State<HalamanLogin> {
     _email.dispose();
     _sandi.dispose();
     super.dispose();
+  }
+
+  Future<void> _masukBiometrik() async {
+    setState(() => _sedangMasuk = true);
+    try {
+      final penyimpanan = PenyimpananBiometrikOwner();
+      final kred = await penyimpanan.bacaKredensial();
+      if (!mounted) {
+        return;
+      }
+      if (kred == null) {
+        setState(() {
+          _sedangMasuk = false;
+          _punyaMasukBiometrik = false;
+        });
+        tampilkanSnackbarSarypos(
+          context,
+          tipe: TipeSnackbarSarypos.error,
+          pesan: 'Masuk cepat pemilik tidak tersimpan. Gunakan email dan sandi.',
+        );
+        return;
+      }
+
+      final sah = await _buahLokal.authenticate(
+        localizedReason: 'Buka aplikasi pemilik menggunakan biometrik perangkat.',
+        options: const AuthenticationOptions(
+          stickyAuth: true,
+          biometricOnly: true,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      if (!sah) {
+        setState(() => _sedangMasuk = false);
+        return;
+      }
+
+      final error = await widget.pengatur.masuk(
+        email: kred.email,
+        sandi: kred.sandi,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      setState(() => _sedangMasuk = false);
+
+      if (error != null) {
+        await penyimpanan.hapusSemua();
+        if (!mounted) {
+          return;
+        }
+        setState(() => _punyaMasukBiometrik = false);
+        tampilkanSnackbarSarypos(
+          context,
+          tipe: TipeSnackbarSarypos.error,
+          pesan: 'Sesudah kata sandi diubah, masuk lagi dengan sandi baru.',
+        );
+        return;
+      }
+
+      if (!mounted) {
+        return;
+      }
+      tampilkanSnackbarSarypos(
+        context,
+        tipe: TipeSnackbarSarypos.sukses,
+        pesan: 'Selamat datang.',
+      );
+      if (widget.dariTabSaya && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sedangMasuk = false);
+      }
+    }
   }
 
   Future<void> _prosesMasuk() async {
@@ -56,6 +159,21 @@ class _HalamanLoginState extends State<HalamanLogin> {
         tipe: TipeSnackbarSarypos.error,
         pesan: 'Login gagal. Periksa email dan kata sandi.',
       );
+      return;
+    }
+
+    await tawarkanAktivasiBiometrikOwnerSesudahKredensialValid(
+      konteks: context,
+      pengatur: widget.pengatur,
+      email: _email.text.trim(),
+      sandi: _sandi.text,
+    );
+    if (!mounted) {
+      return;
+    }
+    await _perbaruiRiwayatBiometrik();
+
+    if (!mounted) {
       return;
     }
     tampilkanSnackbarSarypos(
@@ -88,6 +206,18 @@ class _HalamanLoginState extends State<HalamanLogin> {
           'Gunakan akun Anda untuk mengakses fitur sesuai peran.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
+        if (_punyaMasukBiometrik) ...[
+          const SizedBox(height: 22),
+          OutlinedButton.icon(
+            onPressed: _sedangMasuk ? null : _masukBiometrik,
+            icon: const Icon(Icons.fingerprint),
+            label: const Text('Masuk pemilik cepat'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              foregroundColor: warnaAksenJudulBagian(context),
+            ),
+          ),
+        ],
         const SizedBox(height: 28),
         Form(
           key: _kunciForm,
@@ -95,8 +225,11 @@ class _HalamanLoginState extends State<HalamanLogin> {
             children: [
               TextFormField(
                 controller: _email,
+                enabled: !_sedangMasuk,
+                autofillHints: const [AutofillHints.email],
                 decoration: const InputDecoration(labelText: 'Email'),
                 keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
                 inputFormatters: [TanpaEmojiFormatter()],
                 validator: (v) {
                   final t = v?.trim() ?? '';
@@ -108,8 +241,25 @@ class _HalamanLoginState extends State<HalamanLogin> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _sandi,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Kata sandi'),
+                enabled: !_sedangMasuk,
+                autofillHints: const [AutofillHints.password],
+                obscureText: _sembunyikanSandi,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: _sedangMasuk ? null : (_) => _prosesMasuk(),
+                decoration: InputDecoration(
+                  labelText: 'Kata sandi',
+                  suffixIcon: IconButton(
+                    tooltip: _sembunyikanSandi ? 'Tampilkan sandi' : 'Sembunyikan sandi',
+                    onPressed: () {
+                      setState(() => _sembunyikanSandi = !_sembunyikanSandi);
+                    },
+                    icon: Icon(
+                      _sembunyikanSandi
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                  ),
+                ),
                 inputFormatters: [TanpaEmojiFormatter()],
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Kata sandi wajib diisi';

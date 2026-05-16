@@ -68,4 +68,26 @@ class TransaksiSumber {
 
     return transaksiId;
   }
+
+  Future<void> perbaruiLokasiTransaksi({
+    required String transaksiId,
+    String? lokasiRingkas,
+    double? lat,
+    double? lng,
+  }) async {
+    final baris = <String, dynamic>{};
+    if (lokasiRingkas != null && lokasiRingkas.isNotEmpty) {
+      baris['lokasi_ringkas'] = lokasiRingkas;
+    }
+    if (lat != null) {
+      baris['lat'] = lat;
+    }
+    if (lng != null) {
+      baris['lng'] = lng;
+    }
+    if (baris.isEmpty) {
+      return;
+    }
+    await supabaseKlien.from('transaksi').update(baris).eq('id', transaksiId);
+  }
 }

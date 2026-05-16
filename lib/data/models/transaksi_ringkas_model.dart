@@ -7,6 +7,7 @@ class TransaksiRingkasModel {
     required this.subtotal,
     required this.potongan,
     required this.namaPencatat,
+    this.lokasiRingkas,
   });
 
   final String id;
@@ -16,6 +17,7 @@ class TransaksiRingkasModel {
   final int subtotal;
   final int potongan;
   final String namaPencatat;
+  final String? lokasiRingkas;
 
   factory TransaksiRingkasModel.dariBaris(Map<String, dynamic> row) {
     final waktuMentah = row['waktu'];
@@ -43,6 +45,7 @@ class TransaksiRingkasModel {
       }
     }
 
+    final ringkasLoc = row['lokasi_ringkas']?.toString().trim();
     return TransaksiRingkasModel(
       id: id,
       waktu: waktu,
@@ -51,6 +54,8 @@ class TransaksiRingkasModel {
       subtotal: subtotal,
       potongan: potongan,
       namaPencatat: namaPencatat,
+      lokasiRingkas:
+          ringkasLoc == null || ringkasLoc.isEmpty ? null : ringkasLoc,
     );
   }
 

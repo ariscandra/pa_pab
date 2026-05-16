@@ -110,8 +110,17 @@ class _ShimmerSkeletonCoreState extends State<_ShimmerSkeletonCore>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: widget.duration)
-      ..repeat();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
   }
 
   @override
@@ -122,6 +131,16 @@ class _ShimmerSkeletonCoreState extends State<_ShimmerSkeletonCore>
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          child: DecoratedBox(decoration: BoxDecoration(color: widget.baseColor)),
+        ),
+      );
+    }
     return SizedBox(
       width: widget.width,
       height: widget.height,

@@ -120,6 +120,7 @@ Future<Uint8List> buatBytesLaporanPdf({
               3: pw.Alignment.centerRight,
               4: pw.Alignment.centerLeft,
               5: pw.Alignment.centerLeft,
+              6: pw.Alignment.centerLeft,
             },
             headerStyle: pw.TextStyle(
               fontSize: 9,
@@ -134,6 +135,7 @@ Future<Uint8List> buatBytesLaporanPdf({
               'Total',
               'Pembayaran',
               'Pencatat',
+              'Lokasi',
             ],
             data: data.transaksiRingkas
                 .map(
@@ -144,6 +146,9 @@ Future<Uint8List> buatBytesLaporanPdf({
                     formatRupiahAscii(t.total),
                     labelMetodePembayaran(t.metodePembayaran),
                     t.namaPencatat,
+                    (t.lokasiRingkas == null || t.lokasiRingkas!.isEmpty)
+                        ? '—'
+                        : t.lokasiRingkas!,
                   ],
                 )
                 .toList(),

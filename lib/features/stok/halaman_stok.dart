@@ -7,9 +7,11 @@ import 'package:sarypos/data/models/stok_model.dart';
 import 'package:sarypos/data/sources/produk_dan_stok_sumber.dart';
 import 'package:sarypos/core/formatter_tanpa_emoji.dart';
 import 'package:sarypos/widgets/appbar_sarypos.dart';
+import 'package:sarypos/widgets/judul_bagian_sarypos.dart';
 import 'package:sarypos/widgets/card_sarypos.dart';
 import 'package:sarypos/widgets/empty_state_generik.dart';
 import 'package:sarypos/widgets/snackbar_sarypos.dart';
+import 'package:sarypos/widgets/skeleton_sarypos.dart';
 
 class HalamanStok extends StatefulWidget {
   const HalamanStok({super.key});
@@ -57,7 +59,7 @@ class _HalamanStokState extends State<HalamanStok> {
       return 'Habis';
     }
     if (stok.jumlah <= stok.batasKritis) {
-      return 'Kritis';
+      return 'Menipis';
     }
     return 'Normal';
   }
@@ -157,11 +159,46 @@ class _HalamanStokState extends State<HalamanStok> {
     }
   }
 
+  Widget _skeletonDaftar() {
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: 6,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (_, _) => CardSarypos(
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              const SkeletonBox(width: 48, height: 48, borderRadius: 10),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkeletonLine(
+                      width: MediaQuery.sizeOf(context).width * 0.45,
+                      height: 14,
+                    ),
+                    const SizedBox(height: 8),
+                    SkeletonLine(
+                      width: MediaQuery.sizeOf(context).width * 0.28,
+                      height: 12,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget isi;
     if (_sedangMemuat) {
-      isi = const Center(child: CircularProgressIndicator());
+      isi = _skeletonDaftar();
     } else if (_pesanError != null) {
       isi = EmptyStateGenerik(
         ikon: Icons.error_outline,
@@ -177,15 +214,19 @@ class _HalamanStokState extends State<HalamanStok> {
         pesan: 'Tambahkan produk dan stok terlebih dahulu.',
       );
     } else {
-      isi = Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Stok Produk', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView.separated(
+      isi = RefreshIndicator(
+        onRefresh: _muatStok,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const JudulBagianSarypos(judul: 'Stok produk'),
+            const SizedBox(height: 4),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
                 itemBuilder: (context, indeks) {
                   final stok = _stok[indeks];
                   final status = _statusUntuk(stok);
@@ -218,12 +259,16 @@ class _HalamanStokState extends State<HalamanStok> {
                               style: TextStyle(
                                 color: warnaStatus,
                                 fontWeight: FontWeight.w600,
+                                fontSize: 12,
                               ),
                             ),
                           ),
                           if (owner)
                             TextButton(
                               onPressed: () => _tampilkanDialogSesuaikan(stok),
+                              style: TextButton.styleFrom(
+                                minimumSize: const Size(48, 48),
+                              ),
                               child: const Text('Sesuaikan'),
                             ),
                         ],
@@ -236,6 +281,7 @@ class _HalamanStokState extends State<HalamanStok> {
               ),
             ),
           ],
+        ),
         ),
       );
     }

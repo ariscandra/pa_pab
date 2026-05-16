@@ -7,6 +7,8 @@ import 'package:sarypos/core/warisan_sesi.dart';
 import 'package:sarypos/core/presentasi_log_aktivitas.dart';
 import 'package:sarypos/data/models/transaksi_ringkas_model.dart';
 import 'package:sarypos/data/sources/laporan_sumber.dart';
+import 'package:sarypos/widgets/judul_bagian_sarypos.dart';
+import 'package:sarypos/widgets/skeleton_sarypos.dart';
 
 class PanelTransaksiTerakhirKaryawan extends StatefulWidget {
   const PanelTransaksiTerakhirKaryawan({super.key, required this.idPengguna});
@@ -79,30 +81,23 @@ class _PanelTransaksiTerakhirKaryawanState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Transaksi Terakhir',
-          style: teks.titleSmall?.copyWith(
-            color: warnaAksenJudulBagian(context),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        const JudulBagianSarypos(judul: 'Transaksi terakhir'),
         const SizedBox(height: 8),
         FutureBuilder<List<TransaksiRingkasModel>>(
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: warnaAksenJudulBagian(context),
+              return Column(
+                children: [
+                  for (var i = 0; i < 3; i++) ...[
+                    if (i > 0) const SizedBox(height: 10),
+                    const SkeletonBox(
+                      width: double.infinity,
+                      height: 44,
+                      borderRadius: 8,
                     ),
-                  ),
-                ),
+                  ],
+                ],
               );
             }
             if (snapshot.hasError) {
@@ -159,8 +154,8 @@ class _PanelTransaksiTerakhirKaryawanState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                formatRupiah(daftar[i].total),
+                              TeksRupiah(
+                                daftar[i].total,
                                 style: teks.labelLarge?.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: skema.onSurface,
@@ -168,7 +163,8 @@ class _PanelTransaksiTerakhirKaryawanState
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${labelMetodePembayaran(daftar[i].metodePembayaran)} · ${waktuLogRelatif(daftar[i].waktu)}',
+                                '${labelMetodePembayaran(daftar[i].metodePembayaran)} · ${waktuLogRelatif(daftar[i].waktu)}'
+                                '${(daftar[i].lokasiRingkas != null && daftar[i].lokasiRingkas!.isNotEmpty) ? '\nLokasi: ${daftar[i].lokasiRingkas}' : ''}',
                                 style: teks.bodySmall?.copyWith(
                                   color: skema.onSurfaceVariant,
                                 ),

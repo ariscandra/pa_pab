@@ -22,6 +22,7 @@ String buatCsvRingkasanPenjualan({
       'total_rupiah',
       'metode_pembayaran',
       'nama_pencatat',
+      'lokasi_ringkas',
     ],
     ...data.transaksiRingkas.map(
       (t) => [
@@ -32,6 +33,7 @@ String buatCsvRingkasanPenjualan({
         t.total,
         t.metodePembayaran,
         t.namaPencatat,
+        t.lokasiRingkas ?? '',
       ],
     ),
   ];

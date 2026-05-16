@@ -24,14 +24,26 @@ void catatLogAktivitas({
   required String deskripsi,
   Map<String, dynamic>? metadataJson,
 }) {
-  unawaited(
-    _sumberLog
-        .sisipkan(
-          idPengguna: idPengguna,
-          jenis: jenis,
-          deskripsi: deskripsi,
-          metadataJson: metadataJson,
-        )
-        .catchError((Object _) {}),
-  );
+  unawaited(catatLogAktivitasMenungguSelesai(
+    idPengguna: idPengguna,
+    jenis: jenis,
+    deskripsi: deskripsi,
+    metadataJson: metadataJson,
+  ));
+}
+
+Future<void> catatLogAktivitasMenungguSelesai({
+  String? idPengguna,
+  required String jenis,
+  required String deskripsi,
+  Map<String, dynamic>? metadataJson,
+}) async {
+  try {
+    await _sumberLog.sisipkan(
+      idPengguna: idPengguna,
+      jenis: jenis,
+      deskripsi: deskripsi,
+      metadataJson: metadataJson,
+    );
+  } catch (_) {}
 }

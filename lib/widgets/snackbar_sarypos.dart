@@ -100,7 +100,7 @@ void tampilkanSnackbarSarypos(
                 ),
                 child: Row(
                   children: [
-                    Icon(ikon, color: warnaTeks),
+                    Icon(ikon, size: 22, color: warnaTeks),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -110,8 +110,23 @@ void tampilkanSnackbarSarypos(
                         ),
                       ),
                     ),
-                    Icon(Icons.close, size: 20, color: warnaIkonSekunder),
-                    const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: 'Tutup',
+                      constraints: const BoxConstraints(
+                        minWidth: 44,
+                        minHeight: 44,
+                      ),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                      },
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 22,
+                        color: warnaIkonSekunder,
+                      ),
+                    ),
                   ],
                 ),
               ),

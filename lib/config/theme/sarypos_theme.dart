@@ -274,6 +274,10 @@ ThemeData temaSaryposTerang() {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     iconTheme: const IconThemeData(color: WarnaSarypos.darkStone),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(
+      color: WarnaSarypos.saryRed,
+      linearTrackColor: Color(0x1AD3291E),
+    ),
     pageTransitionsTheme: _transisiHalamanStandar,
   );
 }
@@ -469,6 +473,10 @@ ThemeData temaSaryposGelap() {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     iconTheme: IconThemeData(color: colorScheme.onSurfaceVariant),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: colorScheme.primary,
+      linearTrackColor: colorScheme.primary.withValues(alpha: 0.2),
+    ),
     pageTransitionsTheme: _transisiHalamanStandar,
   );
 }

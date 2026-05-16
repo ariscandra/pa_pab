@@ -9,7 +9,7 @@ class HalamanPencatatanTransaksi extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const AppBarSarypos(judul: 'Pencatatan Transaksi'),
-      body: const HalamanPos(),
+      body: const HalamanPos(diAtasNavUtama: false),
     );
   }
 }

@@ -38,6 +38,7 @@
   - [8. Pengaturan \& profil](#8-pengaturan--profil)
   - [9. Log aktivitas](#9-log-aktivitas)
 - [Fitur utama](#fitur-utama)
+- [Sensor perangkat (v1.1.0)](#sensor-perangkat-v110)
 - [Widget dan komponen](#widget-dan-komponen)
 - [Paket (dependencies)](#paket-dependencies)
 - [Struktur proyek](#struktur-proyek)
@@ -196,11 +197,72 @@
 | **Karyawan** | Kelola data karyawan dengan pembatasan fitur untuk non-owner |
 | **Log aktivitas** | Riwayat aktivitas operasional |
 | **Pengaturan pengguna** | Tema, profil, dan pengaturan terkait akun |
+| **Sensor perangkat** | Kamera (foto produk), GPS + geocoding ringkas, biometrik owner (lihat bagian berikut) |
 
 <details>
 <summary><b>Nilai tambah: paket di luar materi yang dipelajari saat praktikum</b></summary>
 
 Selain packages yang menjadi materi wajib (misalnya <code>get</code>, <code>supabase_flutter</code>, <code>flutter_dotenv</code>), digunakan juga packages untuk ekspor PDF dan CSV, berbagi berkas/dokumen, pemilihan gambar atau dokumen, tipografi Google Fonts, kode batang, serta sugesti teks saat mengetik pada form. Daftar nama paket ada pada bagian <a href="#paket-dependencies">Paket (dependencies)</a>.
+
+</details>
+
+---
+
+## Sensor perangkat (v1.1.0)
+
+<p align="justify">Mulai <strong>versi 1.1.0</strong>, SaryPOS memenuhi persyaratan minimal <strong>tiga fitur berbasis kemampuan perangkat</strong> untuk Proyek Akhir PAB: <strong>kamera</strong> (sudah dipakai sejak rilis awal untuk gambar produk), ditambah <strong>lokasi GPS</strong> dan <strong>otentikasi biometrik</strong> khusus pemilik. Pencatatan lokasi bersifat <em>best effort</em>: transaksi tetap tersimpan meski izin ditolak atau geocoding gagal.</p>
+
+<p>
+  <img src="https://img.shields.io/badge/Versi-1.1.0-D3291E?style=flat-square" alt="Versi 1.1.0" />
+  <img src="https://img.shields.io/badge/Kamera-Foto_Produk-1C4546?style=flat-square" alt="Kamera" />
+  <img src="https://img.shields.io/badge/GPS-Geocoding_gratis-E4AF1A?style=flat-square" alt="GPS" />
+  <img src="https://img.shields.io/badge/Biometrik-Owner_saja-6E6B61?style=flat-square" alt="Biometrik owner" />
+</p>
+
+| Sensor / perangkat | Peran | Keterangan singkat |
+| ------------------ | ----- | ------------------ |
+| **Kamera & galeri** | Foto produk saat tambah atau ubah produk | `image_picker`; unggah ke Supabase Storage |
+| **Lokasi (GPS)** | Jejak lokasi ringkas untuk transaksi POS, login, dan logout | `geolocator` + `permission_handler`; teks alamat dari **OpenStreetMap Nominatim** (gratis, tanpa API key berbayar) |
+| **Biometrik** | Masuk cepat pemilik setelah verifikasi sandi | `local_auth` + `flutter_secure_storage`; hanya <strong>owner</strong>, karyawan tetap email/sandi |
+
+### Lokasi: apa yang dicatat dan di mana tampil
+
+<p align="justify">Koordinat diambil di latar belakang setelah transaksi inti tersimpan, lalu (jika berhasil) diperbarui ke kolom <code>lokasi_ringkas</code>, <code>lat</code>, dan <code>lng</code> pada tabel <strong>transaksi</strong>. Untuk login, logout, dan log transaksi, metadata yang sama disimpan di <code>metadata_json</code> pada <strong>log_aktivitas</strong> (kunci <code>lokasi_ringkas</code>, <code>lat</code>, <code>lng</code>).</p>
+
+| Peristiwa | Penyimpanan | Tampilan di aplikasi |
+| --------- | ----------- | -------------------- |
+| Simpan transaksi POS | Update baris transaksi + metadata log | Laporan penjualan, log aktivitas, cuplikan beranda |
+| Login sukses | Metadata log aktivitas | Log aktivitas, ringkasan beranda |
+| Logout | Metadata log (dicatat sebelum sesi Supabase diakhiri) | Log aktivitas |
+
+<p align="justify">Tidak ada peta interaktif, geofencing, atau pemblokiran transaksi bila lokasi kosong. UI tidak menambahkan penjelasan edukatif kepada karyawan tentang alasan pencatatan lokasi.</p>
+
+### Biometrik owner
+
+<p align="justify">Setelah login atau pendaftaran owner pertama berhasil, aplikasi dapat menawarkan aktivasi masuk dengan sidik jari atau wajah perangkat. Kredensial disimpan terenkripsi di perangkat; login biometrik tetap memakai Supabase Auth di belakang layar. Saat logout, preferensi dan kredensial biometrik yang tersimpan dibersihkan. Karyawan atau kasir <strong>tidak</strong> mendapat opsi biometrik.</p>
+
+### Modul terkait di kode
+
+| Berkas / area | Fungsi |
+| ------------- | ------ |
+| `lib/core/layanan_lokasi_sarypos.dart` | Izin GPS, ambil posisi, reverse geocode Nominatim |
+| `lib/core/penyimpanan_biometrik_owner.dart` | Penyimpanan aman kredensial owner |
+| `lib/core/bantuan_tawarkan_biometrik_owner.dart` | Dialog tawaran aktivasi biometrik |
+| `lib/core/pengatur_sesi.dart` | Lokasi pada login/logout |
+| `lib/features/pos/halaman_pos.dart` | Lokasi setelah transaksi |
+| `lib/core/presentasi_log_aktivitas.dart` | Teks lokasi singkat di UI log |
+
+<details>
+<summary><b>Dependensi tambahan (v1.1.0)</b></summary>
+
+| Paket | Fungsi |
+| ----- | ------ |
+| **geolocator** | Posisi GPS perkiraan |
+| **permission_handler** | Alur izin lokasi |
+| **local_auth** | Sidik jari / wajah perangkat |
+| **flutter_secure_storage** | Penyimpanan aman kredensial owner |
+
+Izin Android/iOS untuk lokasi dan biometrik dikonfigurasi di manifest/plist proyek.
 
 </details>
 
@@ -239,6 +301,10 @@ Selain packages yang menjadi materi wajib (misalnya <code>get</code>, <code>supa
 | **csv** | Impor atau ekspor CSV |
 | **shared_preferences** | Preferensi lokal (misalnya tema) |
 | **flutter_typeahead** | Saran pada field teks |
+| **geolocator** | Posisi GPS (sensor lokasi, v1.1.0) |
+| **permission_handler** | Izin lokasi perangkat |
+| **local_auth** | Otentikasi biometrik owner |
+| **flutter_secure_storage** | Penyimpanan aman kredensial biometrik |
 
 **Pengembangan:** `flutter_lints`, `flutter_launcher_icons`, `flutter_test`.
 
@@ -342,8 +408,9 @@ Selain packages yang menjadi materi wajib (misalnya <code>get</code>, <code>supa
 | **Navigasi** | Navigator dan pola GetX |
 | **Supabase** | Autentikasi, data, pembatasan per peran |
 | **Deployment** | Build APK (dan target lain sesuai kebutuhan) |
+| **Sensor perangkat** | Kamera, GPS + geocoding ringkas, biometrik owner (v1.1.0) |
 
-**Fitur minimum proyek:** login atau register sesuai alur aplikasi, CRUD pada data yang relevan, serta fitur tambahan yang mendukung mitra (POS, laporan, karyawan, dan sejenisnya).
+**Fitur minimum proyek:** login atau register sesuai alur aplikasi, CRUD pada data yang relevan, minimal tiga fitur berbasis kemampuan perangkat, serta fitur tambahan yang mendukung mitra (POS, laporan, karyawan, dan sejenisnya).
 
 ---
 

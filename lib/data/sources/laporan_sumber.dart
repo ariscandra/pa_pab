@@ -51,6 +51,7 @@ class LaporanSumber {
         .from('transaksi')
         .select(
           'id, waktu, total, metode_pembayaran, subtotal, potongan, '
+          'lokasi_ringkas, '
           'pengguna(nama_lengkap)',
         )
         .gte('waktu', awalUtc)
@@ -84,6 +85,7 @@ class LaporanSumber {
         .from('transaksi')
         .select(
           'id, waktu, total, metode_pembayaran, subtotal, potongan, '
+          'lokasi_ringkas, '
           'pengguna(nama_lengkap)',
         )
         .eq('id_pengguna', idPengguna)

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sarypos/core/layanan_catat_log.dart';
+import 'package:sarypos/core/layanan_lokasi_sarypos.dart';
+import 'package:sarypos/core/penyimpanan_biometrik_owner.dart';
 import 'package:sarypos/data/models/pengguna_model.dart';
 import 'package:sarypos/data/sources/pengguna_sumber.dart';
 import 'package:sarypos/data/sources/supabase_klien.dart';
@@ -154,10 +156,22 @@ class PengaturSesi extends ChangeNotifier {
         await supabaseKlien.auth.signOut();
         return 'Akun belum terdaftar di SaryPOS. Hubungi owner.';
       }
-      catatLogAktivitas(
+      final futLok = LayananLokasiSarypos.jalankanAmbilSekali();
+      Map<String, dynamic>? metaLok;
+      try {
+        final hasil = await futLok.timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => null,
+        );
+        if (hasil != null) {
+          metaLok = hasil.keMapMetadataJson();
+        }
+      } catch (_) {}
+      await catatLogAktivitasMenungguSelesai(
         idPengguna: _pengguna!.id,
         jenis: JenisLogAktivitas.login,
         deskripsi: '${_pengguna!.namaLengkap} masuk',
+        metadataJson: metaLok,
       );
       notifyListeners();
       return null;
@@ -170,14 +184,27 @@ class PengaturSesi extends ChangeNotifier {
     try {
       final id = _pengguna?.id;
       final nama = _pengguna?.namaLengkap;
-      await supabaseKlien.auth.signOut();
+      final futLok = LayananLokasiSarypos.jalankanAmbilSekali();
+      Map<String, dynamic>? metaLok;
+      try {
+        final hasil = await futLok.timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => null,
+        );
+        if (hasil != null) {
+          metaLok = hasil.keMapMetadataJson();
+        }
+      } catch (_) {}
       if (id != null) {
-        catatLogAktivitas(
+        await catatLogAktivitasMenungguSelesai(
           idPengguna: id,
           jenis: JenisLogAktivitas.logout,
           deskripsi: '${nama ?? 'Pengguna'} keluar',
+          metadataJson: metaLok,
         );
       }
+      await PenyimpananBiometrikOwner().hapusSemua();
+      await supabaseKlien.auth.signOut();
       _pengguna = null;
       notifyListeners();
       return null;

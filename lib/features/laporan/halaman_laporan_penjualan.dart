@@ -17,7 +17,9 @@ import 'package:sarypos/widgets/card_ringkasan.dart';
 import 'package:sarypos/widgets/card_sarypos.dart';
 import 'package:sarypos/widgets/appbar_sarypos.dart';
 import 'package:sarypos/widgets/empty_state_generik.dart';
+import 'package:sarypos/widgets/judul_bagian_sarypos.dart';
 import 'package:sarypos/widgets/snackbar_sarypos.dart';
+import 'package:sarypos/widgets/skeleton_sarypos.dart';
 
 class HalamanLaporanPenjualan extends StatefulWidget {
   const HalamanLaporanPenjualan({super.key});
@@ -279,7 +281,95 @@ class _HalamanLaporanPenjualanState extends State<HalamanLaporanPenjualan> {
                 future: _future,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        IntrinsicHeight(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: CardSarypos(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const SkeletonLine(
+                                          width: 120,
+                                          height: 12,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SkeletonLine(
+                                          width:
+                                              MediaQuery.sizeOf(context).width *
+                                              0.25,
+                                          height: 28,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: CardSarypos(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const SkeletonLine(
+                                          width: 120,
+                                          height: 12,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SkeletonLine(
+                                          width:
+                                              MediaQuery.sizeOf(context).width *
+                                              0.25,
+                                          height: 28,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ...List.generate(
+                          4,
+                          (_) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: CardSarypos(
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SkeletonLine(
+                                      width: MediaQuery.sizeOf(context).width *
+                                          0.35,
+                                      height: 16,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SkeletonLine(
+                                      width: MediaQuery.sizeOf(context).width *
+                                          0.7,
+                                      height: 12,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
                   }
                   if (snapshot.hasError || !snapshot.hasData) {
                     return EmptyStateGenerik(
@@ -343,33 +433,38 @@ class _HalamanLaporanPenjualanState extends State<HalamanLaporanPenjualan> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        Text(
-                          'Transaksi Terbaru',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
+                        const JudulBagianSarypos(judul: 'Transaksi terbaru'),
                         const SizedBox(height: 8),
                         if (data.transaksiRingkas.isEmpty)
                           const EmptyStateGenerik(
-                            ikon: Icons.inventory_2_outlined,
+                            ikon: Icons.receipt_long_outlined,
+                            judul: 'Belum Ada Transaksi',
                             pesan: 'Belum ada transaksi pada periode ini.',
                           )
                         else
                           ...data.transaksiRingkas.map(
                             (t) => CardSarypos(
                               child: ListTile(
-                                isThreeLine: t.potongan > 0,
-                                title: Text(
-                                  formatRupiah(t.total),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: WarnaSarypos.saryRed,
-                                  ),
+                                isThreeLine: t.potongan > 0 ||
+                                    (t.lokasiRingkas?.isNotEmpty ?? false),
+                                title: TeksRupiah(
+                                  t.total,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                      ),
                                 ),
                                 subtitle: Text(
                                   '${fTanggal.format(t.waktu.toLocal())} · '
                                   '${labelMetodePembayaran(t.metodePembayaran)} · '
                                   'Dicatat: ${t.namaPencatat}'
-                                  '${t.potongan > 0 ? '\nSubtotal ${formatRupiah(t.subtotal)} · Potongan ${formatRupiah(t.potongan)}' : ''}',
+                                  '${t.potongan > 0 ? '\nSubtotal ${formatRupiah(t.subtotal)} · Potongan ${formatRupiah(t.potongan)}' : ''}'
+                                  '${(t.lokasiRingkas != null && t.lokasiRingkas!.isNotEmpty) ? '\nLokasi: ${t.lokasiRingkas}' : ''}',
                                 ),
                               ),
                             ),
